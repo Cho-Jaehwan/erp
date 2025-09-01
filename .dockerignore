@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+README_*.md
+*.md
+
+# Archives
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Logs
+*.log
+logs/
+log/
+
+# Data directories (will be mounted as volumes)
+data/
+erp_system.db
+
+# Build artifacts
+build_docker_image.bat
+deploy_to_nas.sh
+
+# Temporary files
+*.tmp
+*.temp

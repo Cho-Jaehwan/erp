@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}거래처 관리 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-handshake me-2"></i>거래처 관리
+        </h1>
+    </div>
+</div>
+
+<!-- 거래처 추가 버튼 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">
+            <i class="fas fa-plus me-2"></i>새 거래처 추가
+        </button>
+    </div>
+</div>
+
+<!-- 거래처 목록 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">거래처 목록</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>거래처명</th>
+                                <th>유형</th>
+                                <th>담당자</th>
+                                <th>연락처</th>
+                                <th>이메일</th>
+                                <th>상태</th>
+                                <th>등록일</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suppliersTable">
+                            <!-- 거래처 목록이 여기에 동적으로 로드됩니다 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 거래처 추가/수정 모달 -->
+<div class="modal fade" id="supplierModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="supplierModalTitle">새 거래처 추가</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="supplierForm">
+                    <input type="hidden" id="supplierId" name="id">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="supplierName" class="form-label">거래처명 *</label>
+                                <input type="text" class="form-control" id="supplierName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="supplierType" class="form-label">거래처 유형 *</label>
+                                <select class="form-select" id="supplierType" name="supplier_type" required>
+                                    <option value="">유형을 선택하세요</option>
+                                    <option value="in">입고처</option>
+                                    <option value="out">출고처</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="contactPerson" class="form-label">담당자</label>
+                                <input type="text" class="form-control" id="contactPerson" name="contact_person">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">연락처</label>
+                                <input type="tel" class="form-control" id="phone" name="phone">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">이메일</label>
+                        <input type="email" class="form-control" id="email" name="email">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="address" class="form-label">주소</label>
+                        <textarea class="form-control" id="address" name="address" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3" id="statusField" style="display: none;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="isActive" name="is_active" checked>
+                            <label class="form-check-label" for="isActive">
+                                활성 상태
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" id="saveSupplier">저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let suppliers = [];
+    let editingSupplierId = null;
+
+    // 페이지 로드 시 거래처 목록 로드
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSuppliers();
+    });
+
+    // 거래처 목록 로드
+    async function loadSuppliers() {
+        try {
+            const response = await fetch('/api/suppliers', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                suppliers = await response.json();
+                renderSuppliersTable();
+            } else {
+                alert('거래처 목록을 불러오는데 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error loading suppliers:', error);
+            alert('거래처 목록을 불러오는데 실패했습니다.');
+        }
+    }
+
+    // 거래처 테이블 렌더링
+    function renderSuppliersTable() {
+        const tbody = document.getElementById('suppliersTable');
+        tbody.innerHTML = '';
+
+        suppliers.forEach(supplier => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${supplier.name}</td>
+                <td>
+                    <span class="badge ${supplier.supplier_type === 'in' ? 'bg-success' : 'bg-warning'}">
+                        ${supplier.supplier_type === 'in' ? '입고처' : '출고처'}
+                    </span>
+                </td>
+                <td>${supplier.contact_person || '-'}</td>
+                <td>${supplier.phone || '-'}</td>
+                <td>${supplier.email || '-'}</td>
+                <td>
+                    <span class="badge ${supplier.is_active ? 'bg-success' : 'bg-secondary'}">
+                        ${supplier.is_active ? '활성' : '비활성'}
+                    </span>
+                </td>
+                <td>${new Date(supplier.created_at).toLocaleDateString()}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editSupplier(${supplier.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSupplier(${supplier.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // 거래처 추가/수정 모달 열기
+    function openSupplierModal(supplier = null) {
+        const modal = new bootstrap.Modal(document.getElementById('supplierModal'));
+        const form = document.getElementById('supplierForm');
+        const title = document.getElementById('supplierModalTitle');
+        const statusField = document.getElementById('statusField');
+
+        form.reset();
+        editingSupplierId = null;
+
+        if (supplier) {
+            // 수정 모드
+            title.textContent = '거래처 수정';
+            statusField.style.display = 'block';
+            editingSupplierId = supplier.id;
+            
+            document.getElementById('supplierId').value = supplier.id;
+            document.getElementById('supplierName').value = supplier.name;
+            document.getElementById('supplierType').value = supplier.supplier_type;
+            document.getElementById('contactPerson').value = supplier.contact_person || '';
+            document.getElementById('phone').value = supplier.phone || '';
+            document.getElementById('email').value = supplier.email || '';
+            document.getElementById('address').value = supplier.address || '';
+            document.getElementById('isActive').checked = supplier.is_active;
+        } else {
+            // 추가 모드
+            title.textContent = '새 거래처 추가';
+            statusField.style.display = 'none';
+        }
+
+        modal.show();
+    }
+
+    // 거래처 수정
+    function editSupplier(id) {
+        const supplier = suppliers.find(s => s.id === id);
+        if (supplier) {
+            openSupplierModal(supplier);
+        }
+    }
+
+    // 거래처 삭제
+    async function deleteSupplier(id) {
+        if (confirm('정말로 이 거래처를 삭제하시겠습니까?')) {
+            try {
+                const response = await fetch(`/api/suppliers/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('거래처가 삭제되었습니다.');
+                    loadSuppliers();
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || '거래처 삭제에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('Error deleting supplier:', error);
+                alert('거래처 삭제에 실패했습니다.');
+            }
+        }
+    }
+
+    // 거래처 저장
+    document.getElementById('saveSupplier').addEventListener('click', async function() {
+        const form = document.getElementById('supplierForm');
+        const formData = new FormData(form);
+        
+        const supplierData = {
+            name: formData.get('name'),
+            supplier_type: formData.get('supplier_type'),
+            contact_person: formData.get('contact_person') || null,
+            phone: formData.get('phone') || null,
+            email: formData.get('email') || null,
+            address: formData.get('address') || null
+        };
+
+        if (editingSupplierId) {
+            supplierData.is_active = formData.get('is_active') === 'on';
+        }
+
+        try {
+            const url = editingSupplierId ? `/api/suppliers/${editingSupplierId}` : '/api/suppliers';
+            const method = editingSupplierId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(supplierData)
+            });
+
+            if (response.ok) {
+                alert(editingSupplierId ? '거래처가 수정되었습니다.' : '거래처가 추가되었습니다.');
+                bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+                loadSuppliers();
+            } else {
+                const error = await response.json();
+                alert(error.detail || '거래처 저장에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error saving supplier:', error);
+            alert('거래처 저장에 실패했습니다.');
+        }
+    });
+
+    // 모달이 닫힐 때 폼 리셋
+    document.getElementById('supplierModal').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('supplierForm').reset();
+        editingSupplierId = null;
+    });
+</script>
+{% endblock %}

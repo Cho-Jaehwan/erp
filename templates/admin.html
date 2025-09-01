@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}관리자 페이지 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-user-shield me-2"></i>관리자 페이지
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-users me-2"></i>승인 대기 사용자
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if pending_users %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>사용자명</th>
+                                <th>이메일</th>
+                                <th>성명</th>
+                                <th>가입일</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in pending_users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ user.full_name }}</td>
+                                <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-success btn-sm" onclick="approveUser({{ user.id }})">
+                                            <i class="fas fa-check me-1"></i>승인
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="rejectUser({{ user.id }})">
+                                            <i class="fas fa-times me-1"></i>거부
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">승인 대기 중인 사용자가 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function approveUser(userId) {
+        if (!confirm('이 사용자를 승인하시겠습니까?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/admin/approve/${userId}`, {
+                method: 'POST',
+                credentials: 'include'  // 쿠키 포함
+            });
+            
+            if (response.ok) {
+                alert('사용자가 승인되었습니다.');
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('승인 처리 중 오류가 발생했습니다.');
+        }
+    }
+    
+    async function rejectUser(userId) {
+        if (!confirm('이 사용자를 거부하시겠습니까?\n거부된 사용자는 시스템에서 삭제됩니다.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/admin/reject/${userId}`, {
+                method: 'DELETE',
+                credentials: 'include'  // 쿠키 포함
+            });
+            
+            if (response.ok) {
+                alert('사용자가 거부되었습니다.');
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('거부 처리 중 오류가 발생했습니다.');
+        }
+    }
+</script>
+{% endblock %}

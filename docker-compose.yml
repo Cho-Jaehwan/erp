@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  erp-system:
+    build: .
+    container_name: erp-system
+    ports:
+      - "8100:8100"
+    volumes:
+      # 데이터베이스 파일을 호스트에 마운트하여 데이터 영속성 보장
+      - /volume1/docker/erp/data:/app/data
+      # 로그 파일을 호스트에 마운트
+      - /volume1/docker/erp/logs:/app/logs
+    environment:
+      # 환경 변수 설정
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - DB_DIR=/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - erp-network
+
+networks:
+  erp-network:
+    driver: bridge
+
+volumes:
+  # 데이터 영속성을 위한 볼륨
+  erp-data:
+    driver: local

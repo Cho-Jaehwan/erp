@@ -1,0 +1,642 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-tachometer-alt me-2"></i>대시보드 & 통계
+        </h1>
+        <p class="text-muted">안녕하세요, {{ user.full_name }}님! ERP 시스템에 오신 것을 환영합니다.</p>
+    </div>
+</div>
+
+<!-- 필터 섹션 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-filter me-2"></i>필터
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="dateFrom" class="form-label">시작일</label>
+                        <input type="date" class="form-control" id="dateFrom">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="dateTo" class="form-label">종료일</label>
+                        <input type="date" class="form-control" id="dateTo">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="supplierFilter" class="form-label">거래처</label>
+                        <select class="form-select" id="supplierFilter">
+                            <option value="">전체 거래처</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="transactionType" class="form-label">거래 유형</label>
+                        <select class="form-select" id="transactionType">
+                            <option value="">전체</option>
+                            <option value="in">입고</option>
+                            <option value="out">출고</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary" onclick="applyFilters()">
+                            <i class="fas fa-search me-2"></i>필터 적용
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="resetFilters()">
+                            <i class="fas fa-undo me-2"></i>초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 요약 통계 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">총 제품</h4>
+                        <h2 id="totalProducts">{{ total_products }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-boxes fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">총 거래</h4>
+                        <h2 id="totalTransactions">{{ total_transactions }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exchange-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">카테고리</h4>
+                        <h2 id="totalCategories">{{ categories|length }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-tags fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">총 재고</h4>
+                        <h2 id="totalStock">{{ total_stock }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-warehouse fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 응급 재고 알림 섹션 -->
+<div class="row mb-4" id="criticalStockAlerts" style="display: none;">
+    <div class="col-12">
+        <div class="alert alert-danger" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-exclamation-triangle me-2"></i>응급 재고 알림
+            </h5>
+            <div id="criticalStockAlertContent">
+                <!-- 응급 재고 알림 내용이 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 주의 재고 알림 섹션 -->
+<div class="row mb-4" id="warningStockAlerts" style="display: none;">
+    <div class="col-12">
+        <div class="alert alert-warning" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-exclamation-circle me-2"></i>주의 재고 알림
+            </h5>
+            <div id="warningStockAlertContent">
+                <!-- 주의 재고 알림 내용이 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 양호 재고 알림 섹션 -->
+<div class="row mb-4" id="goodStockAlerts" style="display: none;">
+    <div class="col-12">
+        <div class="alert alert-success" role="alert">
+            <h5 class="alert-heading">
+                <i class="fas fa-check-circle me-2"></i>양호 재고 현황
+            </h5>
+            <div id="goodStockAlertContent">
+                <!-- 양호 재고 알림 내용이 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<div class="row">
+    <!-- 최근 거래 내역 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>최근 거래 내역
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_transactions %}
+                <div class="table-responsive">
+                    <table class="table table-sm" id="recentTransactionsTable">
+                        <thead>
+                            <tr>
+                                <th>제품</th>
+                                <th>유형</th>
+                                <th>수량</th>
+                                <th>LOT</th>
+                                <th>거래처</th>
+                                <th>시간</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr>
+                                <td>{{ transaction.product.name }}</td>
+                                <td>
+                                    {% if transaction.transaction_type == 'in' %}
+                                    <span class="badge bg-success">입고</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">출고</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ transaction.quantity }}개</td>
+                                <td>
+                                    {% if transaction.lot_number %}
+                                    <span class="badge bg-info">{{ transaction.lot_number }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if transaction.location %}
+                                    <small class="text-muted">{{ transaction.location }}</small>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ transaction.created_at.strftime('%m-%d %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">최근 거래 내역이 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 카테고리별 재고 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-sitemap me-2"></i>카테고리별 재고
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if category_products %}
+                <div class="category-tree">
+                    {% for category, products in category_products.items() %}
+                    <div class="category-group mb-3">
+                        <div class="category-header d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="fas fa-folder me-2"></i>{{ category }}
+                            </h6>
+                            <span class="badge bg-primary">
+                                {% set category_total = products|sum(attribute='stock_quantity') %}
+                                {{ category_total }}개
+                            </span>
+                        </div>
+                        <div class="product-list ms-3 mt-2">
+                            {% for product in products %}
+                            <div class="product-item d-flex justify-content-between align-items-center py-1 px-2 border-start border-2 border-light">
+                                <div class="product-info">
+                                    <small class="text-muted">
+                                        <i class="fas fa-box me-1"></i>{{ product.name }}
+                                    </small>
+                                </div>
+                                <div class="product-stock">
+                                    <span class="badge {% if product.stock_quantity > 10 %}bg-success{% elif product.stock_quantity > 0 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ product.stock_quantity }}개
+                                    </span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">카테고리 데이터가 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 빠른 작업 및 재고 현황 -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tasks me-2"></i>빠른 작업
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/inventory" class="btn btn-outline-primary">
+                        <i class="fas fa-boxes me-2"></i>품목 관리
+                    </a>
+                    <a href="/stock/in" class="btn btn-outline-success">
+                        <i class="fas fa-arrow-down me-2"></i>입고 처리
+                    </a>
+                    <a href="/stock/out" class="btn btn-outline-warning">
+                        <i class="fas fa-arrow-up me-2"></i>출고 처리
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 재고 현황 차트 -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>재고 현황
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="stockChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.category-tree {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.category-group {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.category-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+}
+
+.product-item {
+    transition: all 0.2s ease;
+    border-left: 3px solid #dee2e6 !important;
+}
+
+.product-item:hover {
+    background-color: #f8f9fa;
+    border-left-color: #007bff !important;
+}
+
+.product-item:last-child {
+    border-bottom: none;
+}
+
+.category-tree::-webkit-scrollbar {
+    width: 6px;
+}
+
+.category-tree::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.category-tree::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.category-tree::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let stockChart = null;
+    let suppliers = [];
+
+    // 페이지 로드 시 초기화
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSuppliers();
+        initializeDateFilters();
+        createStockChart();
+        loadSafetyStockAlerts();
+    });
+
+    // 거래처 목록 로드
+    async function loadSuppliers() {
+        try {
+            const response = await fetch('/api/suppliers', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                suppliers = await response.json();
+                populateSupplierFilter();
+            }
+        } catch (error) {
+            console.error('Error loading suppliers:', error);
+        }
+    }
+
+    // 거래처 필터 드롭다운 채우기
+    function populateSupplierFilter() {
+        const supplierFilter = document.getElementById('supplierFilter');
+        suppliers.forEach(supplier => {
+            const option = document.createElement('option');
+            option.value = supplier.id;
+            option.textContent = supplier.name;
+            supplierFilter.appendChild(option);
+        });
+    }
+
+    // 안전 재고 알림 로드
+    async function loadSafetyStockAlerts() {
+        try {
+            const response = await fetch('/api/safety-stock-alerts', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const alerts = await response.json();
+                displaySafetyStockAlerts(alerts);
+            }
+        } catch (error) {
+            console.error('Error loading safety stock alerts:', error);
+        }
+    }
+
+    // 안전 재고 알림 표시 (3단계 시스템)
+    function displaySafetyStockAlerts(alerts) {
+        const criticalStockAlerts = document.getElementById('criticalStockAlerts');
+        const warningStockAlerts = document.getElementById('warningStockAlerts');
+        const goodStockAlerts = document.getElementById('goodStockAlerts');
+        const criticalStockAlertContent = document.getElementById('criticalStockAlertContent');
+        const warningStockAlertContent = document.getElementById('warningStockAlertContent');
+        const goodStockAlertContent = document.getElementById('goodStockAlertContent');
+
+        // 응급 재고 알림
+        if (alerts.critical_products && alerts.critical_products.length > 0) {
+            let content = '<ul class="mb-0">';
+            alerts.critical_products.forEach(product => {
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-danger">응급</span></li>`;
+            });
+            content += '</ul>';
+            criticalStockAlertContent.innerHTML = content;
+            criticalStockAlerts.style.display = 'block';
+        } else {
+            criticalStockAlerts.style.display = 'none';
+        }
+
+        // 주의 재고 알림
+        if (alerts.warning_products && alerts.warning_products.length > 0) {
+            let content = '<ul class="mb-0">';
+            alerts.warning_products.forEach(product => {
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-warning">주의</span></li>`;
+            });
+            content += '</ul>';
+            warningStockAlertContent.innerHTML = content;
+            warningStockAlerts.style.display = 'block';
+        } else {
+            warningStockAlerts.style.display = 'none';
+        }
+
+        // 양호 재고 현황
+        if (alerts.good_products && alerts.good_products.length > 0) {
+            let content = '<ul class="mb-0">';
+            alerts.good_products.forEach(product => {
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-success">양호</span></li>`;
+            });
+            content += '</ul>';
+            goodStockAlertContent.innerHTML = content;
+            goodStockAlerts.style.display = 'block';
+        } else {
+            goodStockAlerts.style.display = 'none';
+        }
+    }
+
+    // 날짜 필터 초기화 (최근 30일)
+    function initializeDateFilters() {
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+        
+        document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+        document.getElementById('dateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    // 재고 현황 차트 생성
+    function createStockChart() {
+        const ctx = document.getElementById('stockChart').getContext('2d');
+        
+        // 실제 제품 데이터를 사용하여 차트 생성
+        const products = [
+            {% for product in products %}
+            {
+                name: '{{ product.name }}',
+                stock: {{ product.stock_quantity }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        
+        const stockData = {
+            labels: products.map(p => p.name),
+            datasets: [{
+                label: '재고 수량',
+                data: products.map(p => p.stock),
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.2)',
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(255, 205, 86, 0.2)',
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(153, 102, 255, 0.2)',
+                    'rgba(255, 159, 64, 0.2)',
+                    'rgba(199, 199, 199, 0.2)',
+                    'rgba(83, 102, 255, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(255, 205, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(199, 199, 199, 1)',
+                    'rgba(83, 102, 255, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        
+        if (stockChart) {
+            stockChart.destroy();
+        }
+        
+        stockChart = new Chart(ctx, {
+            type: 'bar',
+            data: stockData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // 필터 적용
+    async function applyFilters() {
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        const supplierId = document.getElementById('supplierFilter').value;
+        const transactionType = document.getElementById('transactionType').value;
+
+        try {
+            const params = new URLSearchParams();
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            if (supplierId) params.append('supplier_id', supplierId);
+            if (transactionType) params.append('transaction_type', transactionType);
+
+            const response = await fetch(`/api/transactions/filtered?${params}`, {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                updateDashboard(data);
+            } else {
+                alert('필터 적용에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error applying filters:', error);
+            alert('필터 적용에 실패했습니다.');
+        }
+    }
+
+    // 필터 초기화
+    function resetFilters() {
+        document.getElementById('dateFrom').value = '';
+        document.getElementById('dateTo').value = '';
+        document.getElementById('supplierFilter').value = '';
+        document.getElementById('transactionType').value = '';
+        
+        // 전체 데이터로 대시보드 새로고침
+        location.reload();
+    }
+
+    // 대시보드 업데이트
+    function updateDashboard(data) {
+        // 통계 카드 업데이트
+        document.getElementById('totalProducts').textContent = data.total_products || 0;
+        document.getElementById('totalTransactions').textContent = data.total_transactions || 0;
+        document.getElementById('totalCategories').textContent = data.total_categories || 0;
+        document.getElementById('totalStock').textContent = data.total_stock || 0;
+
+        // 최근 거래 내역 업데이트
+        updateRecentTransactions(data.recent_transactions || []);
+    }
+
+    // 최근 거래 내역 테이블 업데이트
+    function updateRecentTransactions(transactions) {
+        const tbody = document.querySelector('#recentTransactionsTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        transactions.forEach(transaction => {
+            const row = document.createElement('tr');
+            const supplierName = transaction.supplier ? transaction.supplier.name : '-';
+            
+            row.innerHTML = `
+                <td>${transaction.product.name}</td>
+                <td>
+                    <span class="badge ${transaction.transaction_type === 'in' ? 'bg-success' : 'bg-warning'}">
+                        ${transaction.transaction_type === 'in' ? '입고' : '출고'}
+                    </span>
+                </td>
+                <td>${transaction.quantity}개</td>
+                <td>
+                    ${transaction.lot_number ? `<span class="badge bg-info">${transaction.lot_number}</span>` : '<span class="text-muted">-</span>'}
+                </td>
+                <td>
+                    <small class="text-muted">${supplierName}</small>
+                </td>
+                <td>${new Date(transaction.created_at).toLocaleDateString()}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+</script>
+{% endblock %}

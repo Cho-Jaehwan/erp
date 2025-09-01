@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+
+{% block title %}출고 처리 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-arrow-up me-2"></i>출고 처리
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">출고 등록</h5>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="mode" id="singleMode" value="single" checked>
+                    <label class="btn btn-outline-primary btn-sm" for="singleMode">단일 제품</label>
+                    
+                    <input type="radio" class="btn-check" name="mode" id="bulkMode" value="bulk">
+                    <label class="btn btn-outline-primary btn-sm" for="bulkMode">다중 제품</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 단일 제품 출고 폼 -->
+                <form id="singleStockOutForm" class="stock-form">
+                    <div class="mb-3">
+                        <label for="productSelect" class="form-label">제품 선택</label>
+                        <select class="form-select" id="productSelect" name="product_id" required>
+                            <option value="">제품을 선택하세요</option>
+                            {% for product in products %}
+                            {% if product.stock_quantity > 0 %}
+                            <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="lot_number" class="form-label">LOT 번호</label>
+                        <select class="form-select" id="lot_number" name="lot_number" required>
+                            <option value="">LOT를 선택하세요</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">출고 수량</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="supplier_id" class="form-label">출고처</label>
+                        <select class="form-select" id="supplier_id" name="supplier_id">
+                            <option value="">출고처를 선택하세요</option>
+                        </select>
+                        <div class="form-text">출고처가 목록에 없으면 <a href="/suppliers" target="_blank">거래처 관리</a>에서 추가하세요.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">비고</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="출고 관련 메모를 입력하세요"></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="fas fa-arrow-up me-2"></i>출고 처리
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 다중 제품 출고 폼 -->
+                <form id="bulkStockOutForm" class="stock-form" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">제품 목록</label>
+                        <div class="table-responsive">
+                            <table class="table table-sm" id="bulkProductsTable">
+                                <thead>
+                                    <tr>
+                                        <th>제품명</th>
+                                        <th>현재 재고</th>
+                                        <th>LOT 번호</th>
+                                        <th>출고 수량</th>
+                                        <th>액션</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkProductsBody">
+                                    <!-- 동적으로 추가될 행들 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="addProductBtn">
+                            <i class="fas fa-plus me-1"></i>제품 추가
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulkSupplierId" class="form-label">출고처</label>
+                        <select class="form-select" id="bulkSupplierId" name="supplier_id">
+                            <option value="">출고처를 선택하세요</option>
+                        </select>
+                        <div class="form-text">출고처가 목록에 없으면 <a href="/suppliers" target="_blank">거래처 관리</a>에서 추가하세요.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulkNotes" class="form-label">비고</label>
+                        <textarea class="form-control" id="bulkNotes" name="notes" rows="3" placeholder="출고 관련 메모를 입력하세요"></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="fas fa-arrow-up me-2"></i>다중 출고 처리
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">선택된 제품 정보</h5>
+            </div>
+            <div class="card-body" id="productInfo">
+                <p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">안전 재고 알림</h5>
+            </div>
+            <div class="card-body">
+                {% set low_stock_products = [] %}
+                {% set warning_stock_products = [] %}
+                {% for product in products %}
+                    {% if product.safety_stock and product.safety_stock|int > 0 %}
+                        {% if product.stock_quantity <= product.safety_stock|int %}
+                            {% set _ = low_stock_products.append(product) %}
+                        {% elif product.stock_quantity <= (product.safety_stock|int * 1.5) %}
+                            {% set _ = warning_stock_products.append(product) %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if low_stock_products %}
+                    {% for product in low_stock_products %}
+                    <div class="alert alert-danger alert-sm">
+                        <strong>{{ product.name }}</strong><br>
+                        <small>재고: {{ product.stock_quantity }}개 (안전 재고: {{ product.safety_stock }}개)</small>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                
+                {% if warning_stock_products %}
+                    {% for product in warning_stock_products %}
+                    <div class="alert alert-warning alert-sm">
+                        <strong>{{ product.name }}</strong><br>
+                        <small>재고: {{ product.stock_quantity }}개 (안전 재고: {{ product.safety_stock }}개)</small>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                
+                {% if not low_stock_products and not warning_stock_products %}
+                    <p class="text-muted">안전 재고 알림이 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 전역 변수
+    let allProducts = [];
+    let bulkProducts = [];
+    let productCounter = 0;
+
+    // 페이지 로드 시 출고처 목록 로드
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSuppliers();
+        loadProducts();
+        setupModeToggle();
+        setupBulkForm();
+    });
+
+    // 제품 목록 로드
+    async function loadProducts() {
+        try {
+            const response = await fetch('/api/products', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                allProducts = await response.json();
+            }
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
+    // 출고처 목록 로드
+    async function loadSuppliers() {
+        try {
+            const response = await fetch('/api/suppliers', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const suppliers = await response.json();
+                const supplierSelect = document.getElementById('supplier_id');
+                const bulkSupplierSelect = document.getElementById('bulkSupplierId');
+                
+                // 출고처만 필터링 (supplier_type이 'out'이거나 null인 경우 포함)
+                const outSuppliers = suppliers.filter(s => (s.supplier_type === 'out' || !s.supplier_type) && s.is_active);
+                
+                outSuppliers.forEach(supplier => {
+                    // 단일 제품 폼용
+                    const option = document.createElement('option');
+                    option.value = supplier.id;
+                    option.textContent = supplier.name;
+                    supplierSelect.appendChild(option);
+                    
+                    // 다중 제품 폼용
+                    const bulkOption = document.createElement('option');
+                    bulkOption.value = supplier.id;
+                    bulkOption.textContent = supplier.name;
+                    bulkSupplierSelect.appendChild(bulkOption);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading suppliers:', error);
+        }
+    }
+
+    // 모드 토글 설정
+    function setupModeToggle() {
+        const singleMode = document.getElementById('singleMode');
+        const bulkMode = document.getElementById('bulkMode');
+        const singleForm = document.getElementById('singleStockOutForm');
+        const bulkForm = document.getElementById('bulkStockOutForm');
+
+        singleMode.addEventListener('change', function() {
+            if (this.checked) {
+                singleForm.style.display = 'block';
+                bulkForm.style.display = 'none';
+            }
+        });
+
+        bulkMode.addEventListener('change', function() {
+            if (this.checked) {
+                singleForm.style.display = 'none';
+                bulkForm.style.display = 'block';
+            }
+        });
+    }
+
+    // 다중 제품 폼 설정
+    function setupBulkForm() {
+        const addProductBtn = document.getElementById('addProductBtn');
+        addProductBtn.addEventListener('click', addBulkProductRow);
+    }
+
+    // 다중 제품 행 추가
+    function addBulkProductRow() {
+        const tbody = document.getElementById('bulkProductsBody');
+        const row = document.createElement('tr');
+        row.id = `product-row-${productCounter}`;
+        
+        const availableProducts = allProducts.filter(p => p.stock_quantity > 0);
+        
+        row.innerHTML = `
+            <td>
+                <select class="form-select form-select-sm product-select" data-counter="${productCounter}" required>
+                    <option value="">제품 선택</option>
+                    ${availableProducts.map(p => 
+                        `<option value="${p.id}" data-stock="${p.stock_quantity}">${p.name}</option>`
+                    ).join('')}
+                </select>
+            </td>
+            <td class="stock-display">-</td>
+            <td>
+                <select class="form-select form-select-sm lot-select" data-counter="${productCounter}">
+                    <option value="">LOT 선택</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm quantity-input" 
+                       data-counter="${productCounter}" min="1" required>
+            </td>
+            <td>
+                <button type="button" class="btn btn-outline-danger btn-sm" 
+                        onclick="removeBulkProductRow(${productCounter})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        
+        // 이벤트 리스너 추가
+        const productSelect = row.querySelector('.product-select');
+        const lotSelect = row.querySelector('.lot-select');
+        const quantityInput = row.querySelector('.quantity-input');
+        
+        productSelect.addEventListener('change', function() {
+            updateStockDisplay(this);
+            loadLotsForProduct(this.value, lotSelect);
+        });
+        
+        quantityInput.addEventListener('input', function() {
+            updateStockDisplay(productSelect);
+        });
+        
+        productCounter++;
+    }
+
+    // 다중 제품 행 제거
+    function removeBulkProductRow(counter) {
+        const row = document.getElementById(`product-row-${counter}`);
+        if (row) {
+            row.remove();
+        }
+    }
+
+    // 재고 표시 업데이트
+    function updateStockDisplay(productSelect) {
+        const row = productSelect.closest('tr');
+        const stockDisplay = row.querySelector('.stock-display');
+        const quantityInput = row.querySelector('.quantity-input');
+        
+        if (productSelect.value) {
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            const stock = parseInt(selectedOption.dataset.stock);
+            const quantity = parseInt(quantityInput.value) || 0;
+            const afterStock = stock - quantity;
+            
+            stockDisplay.textContent = `${stock} → ${afterStock}`;
+            stockDisplay.className = `stock-display ${afterStock < 0 ? 'text-danger' : 'text-success'}`;
+        } else {
+            stockDisplay.textContent = '-';
+            stockDisplay.className = 'stock-display';
+        }
+    }
+
+    // 제품의 LOT 목록 로드
+    async function loadLotsForProduct(productId, lotSelect) {
+        if (!productId) {
+            lotSelect.innerHTML = '<option value="">LOT 선택</option>';
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/products/${productId}/lots`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const lots = await response.json();
+                lotSelect.innerHTML = '<option value="">LOT 선택</option>';
+                
+                lots.forEach(lot => {
+                    const option = document.createElement('option');
+                    option.value = lot.lot_number;
+                    option.textContent = `${lot.lot_number} (재고: ${lot.quantity}개)`;
+                    option.dataset.quantity = lot.quantity;
+                    lotSelect.appendChild(option);
+                });
+            } else {
+                lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
+            }
+        } catch (error) {
+            console.error('LOT 정보 로드 실패:', error);
+            lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
+        }
+    }
+
+    // 제품의 안전 재고 정보 가져오기
+    async function getProductSafetyStock(productId) {
+        try {
+            const response = await fetch(`/api/products/${productId}`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const product = await response.json();
+                return {
+                    safety_stock: product.safety_stock || 0
+                };
+            }
+        } catch (error) {
+            console.error('Error loading product safety stock:', error);
+        }
+        return null;
+    }
+
+    // 제품 선택 시 정보 표시 및 LOT 목록 로드
+    document.getElementById('productSelect').addEventListener('change', async function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const productInfo = document.getElementById('productInfo');
+        const lotSelect = document.getElementById('lot_number');
+        
+        if (this.value) {
+            const productText = selectedOption.text;
+            const currentStock = productText.match(/현재 재고: (\d+)/)[1];
+            
+            productInfo.innerHTML = `
+                <h6>${selectedOption.text.split(' (현재 재고:')[0]}</h6>
+                <p class="text-muted">현재 재고: <strong>${currentStock}</strong>개</p>
+                <div class="alert alert-info">
+                    <small>출고 후 재고: <strong id="afterStock">-</strong>개</small>
+                </div>
+            `;
+            
+            // LOT 목록 로드
+            try {
+                const response = await fetch(`/api/products/${this.value}/lots`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const lots = await response.json();
+                    lotSelect.innerHTML = '<option value="">LOT를 선택하세요</option>';
+                    
+                    lots.forEach(lot => {
+                        const option = document.createElement('option');
+                        option.value = lot.lot_number;
+                        option.textContent = `${lot.lot_number} (재고: ${lot.quantity}개)`;
+                        option.dataset.quantity = lot.quantity;
+                        lotSelect.appendChild(option);
+                    });
+                } else {
+                    lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
+                }
+            } catch (error) {
+                console.error('LOT 정보 로드 실패:', error);
+                lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
+            }
+        } else {
+            productInfo.innerHTML = '<p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>';
+            lotSelect.innerHTML = '<option value="">LOT를 선택하세요</option>';
+        }
+    });
+    
+    // 수량 입력 시 출고 후 재고 계산 (LOT별)
+    document.getElementById('quantity').addEventListener('input', function() {
+        const lotSelect = document.getElementById('lot_number');
+        const afterStockElement = document.getElementById('afterStock');
+        
+        if (lotSelect.value && afterStockElement && lotSelect.selectedIndex > 0) {
+            const selectedLotOption = lotSelect.options[lotSelect.selectedIndex];
+            const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+            const outQuantity = parseInt(this.value) || 0;
+            const afterStock = lotStock - outQuantity;
+            
+            afterStockElement.textContent = afterStock;
+            afterStockElement.parentElement.className = afterStock < 0 ? 'alert alert-danger' : 'alert alert-info';
+        }
+    });
+    
+    // LOT 선택 시에도 재고 계산 업데이트
+    document.getElementById('lot_number').addEventListener('change', function() {
+        const quantityInput = document.getElementById('quantity');
+        const afterStockElement = document.getElementById('afterStock');
+        
+        if (this.value && afterStockElement && this.selectedIndex > 0) {
+            const selectedLotOption = this.options[this.selectedIndex];
+            const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+            const outQuantity = parseInt(quantityInput.value) || 0;
+            const afterStock = lotStock - outQuantity;
+            
+            afterStockElement.textContent = afterStock;
+            afterStockElement.parentElement.className = afterStock < 0 ? 'alert alert-danger' : 'alert alert-info';
+        }
+    });
+    
+    // 다중 출고 처리
+    document.getElementById('bulkStockOutForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const rows = document.querySelectorAll('#bulkProductsBody tr');
+        if (rows.length === 0) {
+            alert('출고할 제품을 추가해주세요.');
+            return;
+        }
+        
+        const items = [];
+        let hasError = false;
+        
+        for (const row of rows) {
+            const productSelect = row.querySelector('.product-select');
+            const lotSelect = row.querySelector('.lot-select');
+            const quantityInput = row.querySelector('.quantity-input');
+            
+            if (!productSelect.value || !quantityInput.value) {
+                alert('모든 제품의 제품명과 수량을 입력해주세요.');
+                hasError = true;
+                break;
+            }
+            
+            const quantity = parseInt(quantityInput.value);
+            if (quantity <= 0) {
+                alert('출고 수량은 1 이상이어야 합니다.');
+                hasError = true;
+                break;
+            }
+            
+            // LOT별 재고 확인
+            if (lotSelect.value && lotSelect.selectedIndex > 0) {
+                const selectedLotOption = lotSelect.options[lotSelect.selectedIndex];
+                const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+                
+                if (quantity > lotStock) {
+                    const productName = productSelect.options[productSelect.selectedIndex].text;
+                    alert(`제품 "${productName}"의 LOT ${lotSelect.value} 재고가 부족합니다. (LOT 재고: ${lotStock}개, 요청 수량: ${quantity}개)`);
+                    hasError = true;
+                    break;
+                }
+            }
+            
+            items.push({
+                product_id: parseInt(productSelect.value),
+                quantity: quantity,
+                lot_number: lotSelect.value || null
+            });
+        }
+        
+        if (hasError) return;
+        
+        const bulkData = {
+            items: items,
+            supplier_id: document.getElementById('bulkSupplierId').value ? parseInt(document.getElementById('bulkSupplierId').value) : null,
+            notes: document.getElementById('bulkNotes').value
+        };
+        
+        try {
+            const response = await fetch('/stock/out/bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(bulkData)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                alert(result.message);
+                this.reset();
+                document.getElementById('bulkProductsBody').innerHTML = '';
+                productCounter = 0;
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('다중 출고 처리 중 오류가 발생했습니다.');
+        }
+    });
+
+    // 단일 출고 처리
+    document.getElementById('singleStockOutForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const stockData = {
+            product_id: parseInt(formData.get('product_id')),
+            quantity: parseInt(formData.get('quantity')),
+            lot_number: formData.get('lot_number'),
+            supplier_id: formData.get('supplier_id') ? parseInt(formData.get('supplier_id')) : null,
+            notes: formData.get('notes')
+        };
+        
+        // LOT별 재고 부족 확인
+        const lotSelect = document.getElementById('lot_number');
+        if (lotSelect.value && lotSelect.selectedIndex > 0) {
+            const selectedLotOption = lotSelect.options[lotSelect.selectedIndex];
+            const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+            
+            if (stockData.quantity > lotStock) {
+                alert(`선택한 LOT의 재고가 부족합니다. (LOT 재고: ${lotStock}개, 요청 수량: ${stockData.quantity}개)`);
+                return;
+            }
+        }
+
+        // 안전 재고 체크
+        const productSelect = document.getElementById('productSelect');
+        const selectedProductOption = productSelect.options[productSelect.selectedIndex];
+        const productText = selectedProductOption.text;
+        const currentStockMatch = productText.match(/현재 재고: (\d+)/);
+        
+        if (currentStockMatch) {
+            const currentStock = parseInt(currentStockMatch[1]);
+            const afterStock = currentStock - stockData.quantity;
+            
+            // 제품의 안전 재고 정보를 가져와서 체크
+            const productId = stockData.product_id;
+            const safetyStockInfo = await getProductSafetyStock(productId);
+            
+            if (safetyStockInfo && safetyStockInfo.safety_stock > 0) {
+                if (afterStock <= safetyStockInfo.safety_stock) {
+                    const confirmMessage = `출고 후 재고가 안전 재고 수준(${safetyStockInfo.safety_stock}개) 이하로 떨어집니다.\n출고 후 재고: ${afterStock}개\n계속 진행하시겠습니까?`;
+                    if (!confirm(confirmMessage)) {
+                        return;
+                    }
+                }
+            }
+        }
+        
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch('/stock/out', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(stockData)
+            });
+            
+            if (response.ok) {
+                alert('출고가 완료되었습니다.');
+                this.reset();
+                document.getElementById('productInfo').innerHTML = '<p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>';
+                // 페이지 새로고침하여 재고 수량 업데이트
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('출고 처리 중 오류가 발생했습니다.');
+        }
+    });
+</script>
+{% endblock %}

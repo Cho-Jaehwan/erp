@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}입고 처리 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-arrow-down me-2"></i>입고 처리
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">입고 등록</h5>
+            </div>
+            <div class="card-body">
+                <form id="stockInForm">
+                    <div class="mb-3">
+                        <label for="productSelect" class="form-label">제품 선택</label>
+                        <select class="form-select" id="productSelect" name="product_id" required>
+                            <option value="">제품을 선택하세요</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">입고 수량</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="lot_number" class="form-label">LOT 번호</label>
+                        <input type="text" class="form-control" id="lot_number" name="lot_number" placeholder="LOT 번호를 입력하세요 (선택사항)">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="supplier_id" class="form-label">입고처</label>
+                        <select class="form-select" id="supplier_id" name="supplier_id">
+                            <option value="">입고처를 선택하세요</option>
+                        </select>
+                        <div class="form-text">입고처가 목록에 없으면 <a href="/suppliers" target="_blank">거래처 관리</a>에서 추가하세요.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">비고</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="입고 관련 메모를 입력하세요"></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-arrow-down me-2"></i>입고 처리
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">선택된 제품 정보</h5>
+            </div>
+            <div class="card-body" id="productInfo">
+                <p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 페이지 로드 시 입고처 목록 로드
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSuppliers();
+    });
+
+    // 입고처 목록 로드
+    async function loadSuppliers() {
+        try {
+            const response = await fetch('/api/suppliers', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const suppliers = await response.json();
+                const supplierSelect = document.getElementById('supplier_id');
+                
+                // 입고처만 필터링
+                const inSuppliers = suppliers.filter(s => s.supplier_type === 'in' && s.is_active);
+                
+                inSuppliers.forEach(supplier => {
+                    const option = document.createElement('option');
+                    option.value = supplier.id;
+                    option.textContent = supplier.name;
+                    supplierSelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading suppliers:', error);
+        }
+    }
+
+    // 제품 선택 시 정보 표시
+    document.getElementById('productSelect').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const productInfo = document.getElementById('productInfo');
+        
+        if (this.value) {
+            const productText = selectedOption.text;
+            const currentStock = productText.match(/현재 재고: (\d+)/)[1];
+            
+            productInfo.innerHTML = `
+                <h6>${selectedOption.text.split(' (현재 재고:')[0]}</h6>
+                <p class="text-muted">현재 재고: <strong>${currentStock}</strong>개</p>
+            `;
+        } else {
+            productInfo.innerHTML = '<p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>';
+        }
+    });
+    
+    // 입고 처리
+    document.getElementById('stockInForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const stockData = {
+            product_id: parseInt(formData.get('product_id')),
+            quantity: parseInt(formData.get('quantity')),
+            lot_number: formData.get('lot_number'),
+            supplier_id: formData.get('supplier_id') ? parseInt(formData.get('supplier_id')) : null,
+            notes: formData.get('notes')
+        };
+        
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch('/stock/in', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(stockData)
+            });
+            
+            if (response.ok) {
+                alert('입고가 완료되었습니다.');
+                this.reset();
+                document.getElementById('productInfo').innerHTML = '<p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>';
+                // 페이지 새로고침하여 재고 수량 업데이트
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('입고 처리 중 오류가 발생했습니다.');
+        }
+    });
+</script>
+{% endblock %}

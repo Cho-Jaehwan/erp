@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}품목 관리 - ERP 시스템{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-boxes me-2"></i>품목 관리
+            </h1>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
+                <i class="fas fa-plus me-2"></i>제품 추가
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>제품명</th>
+                                <th>카테고리</th>
+                                <th>가격</th>
+                                <th>재고 수량</th>
+                                <th>안전 재고</th>
+                                <th>상태</th>
+                                <th>설명</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTable">
+                            {% for product in products %}
+                            <tr>
+                                <td>{{ product.name }}</td>
+                                <td>{{ product.category or '-' }}</td>
+                                <td>{{ "₩{:,.0f}".format(product.price) }}</td>
+                                <td>
+                                    <span class="badge {% if product.stock_quantity > 10 %}bg-success{% elif product.stock_quantity > 0 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ product.stock_quantity }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ product.safety_stock or 0 }}</span>
+                                </td>
+                                <td>
+                                    {% if product.safety_stock and product.safety_stock > 0 %}
+                                        {% if product.stock_quantity <= product.safety_stock %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>응급
+                                            </span>
+                                        {% elif product.stock_quantity <= product.safety_stock * 1.5 %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-exclamation-circle me-1"></i>주의
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>양호
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-secondary">미설정</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ product.description or '-' }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editProduct({{ product.id }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="setSafetyStock({{ product.id }}, '{{ product.name }}', {{ product.safety_stock or 0 }})">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 제품 추가 모달 -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">제품 추가</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addProductForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="productName" class="form-label">제품명</label>
+                        <input type="text" class="form-control" id="productName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productCategory" class="form-label">카테고리</label>
+                        <input type="text" class="form-control" id="productCategory" name="category">
+                    </div>
+                    <div class="mb-3">
+                        <label for="productPrice" class="form-label">가격</label>
+                        <input type="number" class="form-control" id="productPrice" name="price" step="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productSafetyStock" class="form-label">안전 재고</label>
+                        <input type="number" class="form-control" id="productSafetyStock" name="safety_stock" value="0" min="0">
+                        <div class="form-text">재고가 이 수준 이하로 떨어지면 알림이 표시됩니다.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productSafetyStockLevel" class="form-label">안전 재고 단계</label>
+                        <select class="form-select" id="productSafetyStockLevel" name="safety_stock_level">
+                            <option value="good">양호 (Good)</option>
+                            <option value="warning">주의 (Warning)</option>
+                            <option value="critical">응급 (Critical)</option>
+                        </select>
+                        <div class="form-text">재고 상태에 따른 알림 단계를 설정합니다.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productDescription" class="form-label">설명</label>
+                        <textarea class="form-control" id="productDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">추가</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 제품 수정 모달 -->
+<div class="modal fade" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">제품 수정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editProductForm">
+                <div class="modal-body">
+                    <input type="hidden" id="editProductId" name="id">
+                    <div class="mb-3">
+                        <label for="editProductName" class="form-label">제품명</label>
+                        <input type="text" class="form-control" id="editProductName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editProductCategory" class="form-label">카테고리</label>
+                        <input type="text" class="form-control" id="editProductCategory" name="category">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editProductPrice" class="form-label">가격</label>
+                        <input type="number" class="form-control" id="editProductPrice" name="price" step="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editProductDescription" class="form-label">설명</label>
+                        <textarea class="form-control" id="editProductDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">수정</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 안전 재고 설정 모달 -->
+<div class="modal fade" id="safetyStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">안전 재고 설정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="safetyStockForm">
+                <div class="modal-body">
+                    <input type="hidden" id="safetyStockProductId" name="product_id">
+                    <div class="mb-3">
+                        <label class="form-label">제품명</label>
+                        <p class="form-control-plaintext" id="safetyStockProductName"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="safetyStockValue" class="form-label">안전 재고 수준</label>
+                        <input type="number" class="form-control" id="safetyStockValue" name="safety_stock" min="0" required>
+                        <div class="form-text">재고가 이 수준 이하로 떨어지면 알림이 표시됩니다.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('addProductForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const productData = {
+            name: formData.get('name'),
+            category: formData.get('category'),
+            price: parseFloat(formData.get('price')),
+            safety_stock: parseInt(formData.get('safety_stock')),
+            safety_stock_level: formData.get('safety_stock_level'),
+            description: formData.get('description')
+        };
+        
+        try {
+            const token = localStorage.getItem('access_token');
+            const response = await fetch('/inventory/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(productData)
+            });
+            
+            if (response.ok) {
+                alert('제품이 추가되었습니다.');
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('제품 추가 중 오류가 발생했습니다.');
+        }
+    });
+    
+    async function editProduct(productId) {
+        try {
+            // 제품 정보 조회
+            const response = await fetch(`/api/products/${productId}`, {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error('제품 정보를 불러올 수 없습니다.');
+            }
+            
+            const product = await response.json();
+            
+            // 모달 폼에 데이터 채우기
+            document.getElementById('editProductId').value = product.id;
+            document.getElementById('editProductName').value = product.name;
+            document.getElementById('editProductCategory').value = product.category || '';
+            document.getElementById('editProductPrice').value = product.price;
+            document.getElementById('editProductDescription').value = product.description || '';
+            
+            // 모달 열기
+            const modal = new bootstrap.Modal(document.getElementById('editProductModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error loading product:', error);
+            alert('제품 정보를 불러오는 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 제품 수정 폼 제출
+    document.getElementById('editProductForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const productId = formData.get('id');
+        const productData = {
+            name: formData.get('name'),
+            category: formData.get('category'),
+            price: parseFloat(formData.get('price')),
+            description: formData.get('description')
+        };
+        
+        try {
+            const response = await fetch(`/api/products/${productId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(productData)
+            });
+            
+            if (response.ok) {
+                alert('제품이 수정되었습니다.');
+                bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert(error.detail || '제품 수정에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error updating product:', error);
+            alert('제품 수정 중 오류가 발생했습니다.');
+        }
+    });
+
+    // 안전 재고 설정 모달 열기
+    function setSafetyStock(productId, productName, currentSafetyStock) {
+        document.getElementById('safetyStockProductId').value = productId;
+        document.getElementById('safetyStockProductName').textContent = productName;
+        document.getElementById('safetyStockValue').value = currentSafetyStock;
+        
+        const modal = new bootstrap.Modal(document.getElementById('safetyStockModal'));
+        modal.show();
+    }
+
+    // 안전 재고 설정 저장
+    document.getElementById('safetyStockForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const productId = formData.get('product_id');
+        const safetyStock = parseInt(formData.get('safety_stock'));
+        
+        try {
+            const response = await fetch(`/api/products/${productId}/safety-stock`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ 
+                    safety_stock: safetyStock
+                })
+            });
+            
+            if (response.ok) {
+                alert('안전 재고가 설정되었습니다.');
+                bootstrap.Modal.getInstance(document.getElementById('safetyStockModal')).hide();
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert(error.detail || '안전 재고 설정에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error setting safety stock:', error);
+            alert('안전 재고 설정에 실패했습니다.');
+        }
+    });
+</script>
+{% endblock %}
