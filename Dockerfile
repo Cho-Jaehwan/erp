@@ -8,7 +8,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# 시간대 설정 (한국 시간)
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Python 의존성 파일 복사
 COPY requirements.txt .

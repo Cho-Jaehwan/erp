@@ -156,6 +156,44 @@ SQLite 데이터베이스 파일(`erp_system.db`)을 정기적으로 백업하�
 
 이 프로젝트는 MIT 라이선스 하에 배포됩니다.
 
+## 시간대 문제 해결
+
+도커 환경에서 입출고 시간이 정확하지 않은 경우, 다음 방법으로 해결할 수 있습니다:
+
+### 1. 도커 재빌드
+```bash
+# Windows
+rebuild_docker.bat
+
+# 또는 수동으로
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+### 2. 시간대 테스트
+```bash
+# Windows
+test_timezone_in_docker.bat
+
+# 또는 수동으로
+docker-compose exec erp-system python timezone_test.py
+```
+
+### 3. 시간대 디버깅 API
+브라우저에서 다음 URL에 접속하여 시간대 정보를 확인할 수 있습니다:
+```
+http://localhost:8100/api/debug/timezone
+```
+
+### 4. 수동 시간대 설정
+도커 컨테이너 내에서 시간대를 수동으로 설정하려면:
+```bash
+docker-compose exec erp-system bash
+ln -snf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+echo "Asia/Seoul" > /etc/timezone
+```
+
 ## 지원
 
 문제가 발생하거나 기능 요청이 있으시면 이슈를 생성해주세요.

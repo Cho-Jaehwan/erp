@@ -16,6 +16,7 @@ services:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - DB_DIR=/app/data
+      - TZ=Asia/Seoul
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8100/login"]

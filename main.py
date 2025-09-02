@@ -14,7 +14,7 @@ import pytz
 
 from database import get_db, engine, Base
 from models import User, Product, StockTransaction, Supplier
-from auth import get_current_user, get_current_admin, create_access_token, verify_password, get_password_hash
+from auth import get_current_user, get_current_admin, create_access_token, create_refresh_token, verify_password, get_password_hash
 from schemas import UserCreate, UserLogin, ProductCreate, ProductUpdate, StockTransactionCreate, SupplierCreate, SupplierUpdate, BulkStockOutCreate
 import subprocess
 import sys
@@ -57,7 +57,9 @@ SEOUL_TZ = pytz.timezone('Asia/Seoul')
 
 def get_seoul_time():
     """서울 시간을 반환합니다."""
-    return datetime.now(SEOUL_TZ)
+    seoul_time = datetime.now(SEOUL_TZ)
+    print(f"DEBUG: 현재 서울 시간: {seoul_time}")
+    return seoul_time
 
 def parse_date_with_timezone(date_string: str) -> datetime:
     """날짜 문자열을 서울 시간대로 파싱합니다."""
@@ -65,46 +67,79 @@ def parse_date_with_timezone(date_string: str) -> datetime:
         # 날짜만 있는 경우 (YYYY-MM-DD)
         if len(date_string) == 10:
             naive_date = datetime.strptime(date_string, "%Y-%m-%d")
-            return SEOUL_TZ.localize(naive_date)
+            localized_date = SEOUL_TZ.localize(naive_date)
+            print(f"DEBUG: 날짜 파싱 - 입력: {date_string}, 결과: {localized_date}")
+            return localized_date
         # 날짜와 시간이 있는 경우
         else:
             naive_date = datetime.strptime(date_string, "%Y-%m-%d %H:%M:%S")
-            return SEOUL_TZ.localize(naive_date)
+            localized_date = SEOUL_TZ.localize(naive_date)
+            print(f"DEBUG: 날짜시간 파싱 - 입력: {date_string}, 결과: {localized_date}")
+            return localized_date
     except ValueError:
         raise ValueError(f"잘못된 날짜 형식입니다: {date_string}")
+
+def format_datetime_for_display(dt: datetime) -> str:
+    """datetime 객체를 한국 시간대로 포맷팅하여 반환합니다."""
+    if dt.tzinfo is None:
+        # naive datetime인 경우 서울 시간대로 변환
+        dt = SEOUL_TZ.localize(dt)
+    else:
+        # 다른 시간대인 경우 서울 시간대로 변환
+        dt = dt.astimezone(SEOUL_TZ)
+    
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 # 정적 파일과 템플릿 설정
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # 쿠키 기반 인증 헬퍼 함수
-def get_current_user_from_cookie(access_token: str = Cookie(None)):
-    print(f"DEBUG: 쿠키에서 받은 토큰: {access_token}")
-    if not access_token:
+def get_current_user_from_cookie(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
+    print(f"DEBUG: 쿠키에서 받은 액세스 토큰: {access_token}")
+    print(f"DEBUG: 쿠키에서 받은 리프레시 토큰: {refresh_token}")
+    
+    if not access_token and not refresh_token:
         print("DEBUG: 토큰이 없습니다")
         return None
     
-    from auth import verify_token
+    from auth import verify_token, verify_refresh_token, is_token_expired, create_access_token
     from database import SessionLocal
     
-    username = verify_token(access_token)
-    print(f"DEBUG: 토큰에서 추출한 사용자명: {username}")
-    if not username:
-        print("DEBUG: 토큰 검증 실패")
-        return None
-        
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.username == username).first()
-        print(f"DEBUG: 데이터베이스에서 찾은 사용자: {user.username if user else None}")
-        # 승인된 사용자만 반환
-        if user and user.is_approved:
-            print("DEBUG: 사용자 인증 성공")
-            return user
-        print("DEBUG: 사용자 승인되지 않음")
-        return None
-    finally:
-        db.close()
+    # 액세스 토큰이 있고 유효한 경우
+    if access_token and not is_token_expired(access_token):
+        username = verify_token(access_token)
+        if username:
+            print(f"DEBUG: 액세스 토큰에서 추출한 사용자명: {username}")
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.username == username).first()
+                if user and user.is_approved:
+                    print("DEBUG: 액세스 토큰으로 사용자 인증 성공")
+                    return user
+            except Exception as e:
+                print(f"DEBUG: 데이터베이스 조회 중 오류: {e}")
+            finally:
+                db.close()
+    
+    # 액세스 토큰이 만료되었거나 없고, 리프레시 토큰이 있는 경우
+    if refresh_token:
+        username = verify_refresh_token(refresh_token)
+        if username:
+            print(f"DEBUG: 리프레시 토큰에서 추출한 사용자명: {username}")
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.username == username).first()
+                if user and user.is_approved:
+                    print("DEBUG: 리프레시 토큰으로 사용자 인증 성공")
+                    return user
+            except Exception as e:
+                print(f"DEBUG: 데이터베이스 조회 중 오류: {e}")
+            finally:
+                db.close()
+    
+    print("DEBUG: 토큰 검증 실패")
+    return None
 
 # 메인 페이지 - 로그인 페이지로 리다이렉트
 @app.get("/", response_class=HTMLResponse)
@@ -133,16 +168,32 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             detail="관리자 승인이 필요합니다"
         )
     
+    # 액세스 토큰과 리프레시 토큰 생성
     access_token = create_access_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    
     response = RedirectResponse(url="/dashboard", status_code=302)
+    
+    # 액세스 토큰 쿠키 (7일)
     response.set_cookie(
         key="access_token", 
         value=access_token, 
         httponly=False,  # JavaScript에서 접근 가능하도록
-        max_age=86400,   # 24시간
+        max_age=604800,  # 7일 (7 * 24 * 60 * 60)
         secure=False,    # HTTP 환경에서도 작동하도록
         samesite="lax"   # CSRF 보호
     )
+    
+    # 리프레시 토큰 쿠키 (30일)
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True,   # 보안을 위해 JavaScript에서 접근 불가
+        max_age=2592000, # 30일 (30 * 24 * 60 * 60)
+        secure=False,    # HTTP 환경에서도 작동하도록
+        samesite="lax"   # CSRF 보호
+    )
+    
     return response
 
 # 회원가입 페이지
@@ -190,6 +241,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
 async def logout():
     response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie(key="access_token")
+    response.delete_cookie(key="refresh_token")
     return response
 
 # 대시보드
@@ -453,7 +505,8 @@ async def process_stock_in(transaction: StockTransactionCreate, access_token: st
     # 재고 수량 증가
     product.stock_quantity += transaction.quantity
     
-    # 입고 거래 기록
+    # 입고 거래 기록 (서울 시간대 사용)
+    current_time = get_seoul_time()
     stock_transaction = StockTransaction(
         product_id=transaction.product_id,
         user_id=user.id,
@@ -462,7 +515,8 @@ async def process_stock_in(transaction: StockTransactionCreate, access_token: st
         quantity=transaction.quantity,
         lot_number=transaction.lot_number,
         location=transaction.location,
-        notes=transaction.notes
+        notes=transaction.notes,
+        created_at=current_time
     )
     db.add(stock_transaction)
     db.commit()
@@ -512,7 +566,8 @@ async def process_stock_out(transaction: StockTransactionCreate, access_token: s
     # 재고 수량 감소
     product.stock_quantity -= transaction.quantity
     
-    # 출고 거래 기록
+    # 출고 거래 기록 (서울 시간대 사용)
+    current_time = get_seoul_time()
     stock_transaction = StockTransaction(
         product_id=transaction.product_id,
         user_id=user.id,
@@ -521,7 +576,8 @@ async def process_stock_out(transaction: StockTransactionCreate, access_token: s
         quantity=transaction.quantity,
         lot_number=transaction.lot_number,
         location=transaction.location,
-        notes=transaction.notes
+        notes=transaction.notes,
+        created_at=current_time
     )
     db.add(stock_transaction)
     db.commit()
@@ -589,7 +645,8 @@ async def process_bulk_stock_out(bulk_data: BulkStockOutCreate, access_token: st
         # 재고 수량 감소
         product.stock_quantity -= item.quantity
         
-        # 출고 거래 기록
+        # 출고 거래 기록 (서울 시간대 사용)
+        current_time = get_seoul_time()
         stock_transaction = StockTransaction(
             product_id=item.product_id,
             user_id=user.id,
@@ -598,7 +655,8 @@ async def process_bulk_stock_out(bulk_data: BulkStockOutCreate, access_token: st
             quantity=item.quantity,
             lot_number=item.lot_number,
             location=None,
-            notes=bulk_data.notes
+            notes=bulk_data.notes,
+            created_at=current_time
         )
         transactions.append(stock_transaction)
         db.add(stock_transaction)
@@ -916,6 +974,26 @@ async def get_filtered_transactions(
         "total_suppliers": total_suppliers
     }
 
+# 시간대 디버깅 API
+@app.get("/api/debug/timezone")
+async def debug_timezone():
+    """시간대 디버깅 정보를 반환합니다."""
+    import time
+    from datetime import datetime
+    
+    utc_now = datetime.utcnow()
+    seoul_now = get_seoul_time()
+    local_now = datetime.now()
+    
+    return {
+        "utc_time": utc_now.strftime('%Y-%m-%d %H:%M:%S'),
+        "seoul_time": seoul_now.strftime('%Y-%m-%d %H:%M:%S'),
+        "local_time": local_now.strftime('%Y-%m-%d %H:%M:%S'),
+        "timezone_offset": time.timezone,
+        "timezone_name": time.tzname,
+        "environment_tz": os.environ.get('TZ', 'Not set')
+    }
+
 # 거래 내역 엑셀 다운로드 API
 @app.get("/api/transactions/export")
 async def export_transactions(
@@ -972,8 +1050,10 @@ async def export_transactions(
     
     # 데이터 작성
     for transaction in transactions:
+        # 시간대를 고려한 날짜 포맷팅
+        formatted_time = format_datetime_for_display(transaction.created_at)
         writer.writerow([
-            transaction.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            formatted_time,
             transaction.product.name,
             '입고' if transaction.transaction_type == 'in' else '출고',
             transaction.quantity,
@@ -983,8 +1063,9 @@ async def export_transactions(
             transaction.notes or ''
         ])
     
-    # 파일명 생성
-    filename = f"거래내역_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    # 파일명 생성 (서울 시간대 사용)
+    current_time = get_seoul_time()
+    filename = f"거래내역_{current_time.strftime('%Y%m%d_%H%M%S')}.csv"
     
     # CSV 데이터를 바이트로 변환
     output.seek(0)
@@ -999,6 +1080,88 @@ async def export_transactions(
         media_type='text/csv',
         headers={'Content-Disposition': f'attachment; filename="{encoded_filename}"'}
     )
+
+# 토큰 갱신 API
+@app.post("/api/refresh-token")
+async def refresh_token(refresh_token: str = Cookie(None)):
+    """리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급합니다."""
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="리프레시 토큰이 필요합니다")
+    
+    from auth import verify_refresh_token, create_access_token
+    
+    username = verify_refresh_token(refresh_token)
+    if not username:
+        raise HTTPException(status_code=401, detail="유효하지 않은 리프레시 토큰입니다")
+    
+    # 새로운 액세스 토큰 생성
+    new_access_token = create_access_token(data={"sub": username})
+    
+    response = {"access_token": new_access_token, "token_type": "bearer"}
+    
+    # 새로운 액세스 토큰을 쿠키에 설정
+    response_obj = {"detail": "토큰이 갱신되었습니다"}
+    response_obj = RedirectResponse(url="/dashboard", status_code=302)
+    response_obj.set_cookie(
+        key="access_token", 
+        value=new_access_token, 
+        httponly=False,
+        max_age=604800,  # 7일
+        secure=False,
+        samesite="lax"
+    )
+    
+    return response_obj
+
+# 토큰 상태 확인 API
+@app.get("/api/token-status")
+async def get_token_status(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
+    """토큰의 상태를 확인합니다."""
+    from auth import is_token_expired, get_token_expiry_time
+    
+    if not access_token and not refresh_token:
+        return {"status": "no_token", "message": "토큰이 없습니다"}
+    
+    result = {}
+    
+    if access_token:
+        is_expired = is_token_expired(access_token)
+        expiry_time = get_token_expiry_time(access_token)
+        result["access_token"] = {
+            "exists": True,
+            "expired": is_expired,
+            "expiry_time": expiry_time.isoformat() if expiry_time else None
+        }
+    else:
+        result["access_token"] = {"exists": False}
+    
+    if refresh_token:
+        is_expired = is_token_expired(refresh_token)
+        expiry_time = get_token_expiry_time(refresh_token)
+        result["refresh_token"] = {
+            "exists": True,
+            "expired": is_expired,
+            "expiry_time": expiry_time.isoformat() if expiry_time else None
+        }
+    else:
+        result["refresh_token"] = {"exists": False}
+    
+    return result
+
+# 연결 풀 상태 확인 엔드포인트 (디버그용)
+@app.get("/api/debug/pool-status")
+async def get_pool_status():
+    """데이터베이스 연결 풀 상태를 반환합니다."""
+    from database import get_pool_status
+    return get_pool_status()
+
+# 연결 풀 리셋 엔드포인트 (디버그용)
+@app.post("/api/debug/reset-pool")
+async def reset_pool():
+    """데이터베이스 연결 풀을 리셋합니다."""
+    from database import reset_pool
+    reset_pool()
+    return {"message": "연결 풀이 리셋되었습니다."}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8100)

@@ -11,7 +11,8 @@ from models import User
 # JWT 설정
 SECRET_KEY = "your-secret-key-here-change-in-production"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24시간
+ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7일 (1440분 → 10080분)
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # 리프레시 토큰 30일
 
 # 비밀번호 해싱
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -39,6 +40,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token(data: dict):
+    """JWT 리프레시 토큰 생성"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
 def verify_token(token: str) -> Optional[str]:
     """JWT 토큰 검증"""
     try:
@@ -47,6 +56,42 @@ def verify_token(token: str) -> Optional[str]:
         if username is None:
             return None
         return username
+    except JWTError:
+        return None
+
+def verify_refresh_token(token: str) -> Optional[str]:
+    """JWT 리프레시 토큰 검증"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            return None
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return username
+    except JWTError:
+        return None
+
+def is_token_expired(token: str) -> bool:
+    """토큰 만료 여부 확인"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        exp = payload.get("exp")
+        if exp is None:
+            return True
+        return datetime.utcnow().timestamp() > exp
+    except JWTError:
+        return True
+
+def get_token_expiry_time(token: str) -> Optional[datetime]:
+    """토큰 만료 시간 반환"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        exp = payload.get("exp")
+        if exp is None:
+            return None
+        return datetime.fromtimestamp(exp)
     except JWTError:
         return None
 
