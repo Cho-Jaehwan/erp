@@ -1,4 +1,4 @@
-// ERP 시스템 JavaScript
+// 재고관리 시스템 JavaScript
 
 // 전역 변수
 let accessToken = localStorage.getItem('access_token');
@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!window.location.pathname.includes('/login') && 
         !window.location.pathname.includes('/register') && 
         window.location.pathname !== '/') {
-        console.log('DEBUG: 관리자 메뉴 체크 실행');
+        console.log('   UG: 관리자 메뉴 체크 실행');
         checkUserRole();
     }
     

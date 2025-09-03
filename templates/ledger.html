@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}장부 - ERP 시스템{% endblock %}
+{% block title %}장부 - 재고관리 시스템{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -41,6 +41,16 @@
                             <option value="in">입고</option>
                             <option value="out">출고</option>
                         </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="productFilter" class="form-label">제품명</label>
+                        <select class="form-select" id="productFilter" name="product_id">
+                            <option value="">전체 제품</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="productSearch" class="form-label">제품명 검색</label>
+                        <input type="text" class="form-control" id="productSearch" name="product_search" placeholder="제품명을 입력하세요">
                     </div>
                     <div class="col-12">
                         <button type="submit" class="btn btn-primary">
@@ -122,8 +132,9 @@
                                     <th>수량</th>
                                     <th>LOT 번호</th>
                                     <th>거래처</th>
-                                    <th>담당자</th>
+                                    <th>작업자</th>
                                     <th>비고</th>
+                                    <th>작업</th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTableBody">
@@ -172,14 +183,34 @@
     let totalPages = 1;
     let currentFilters = {};
     let allSuppliers = [];
+    let allProducts = [];
+    let currentUser = null;
 
     // 페이지 로드 시 초기화
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
         setupDefaultDateRange();
+        await loadCurrentUser();
         loadSuppliers();
+        loadProducts();
         setupEventListeners();
         loadTransactions();
     });
+
+    // 현재 사용자 정보 로드
+    async function loadCurrentUser() {
+        try {
+            const response = await fetch('/api/user/me', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                currentUser = await response.json();
+                console.log('현재 사용자:', currentUser);
+            }
+        } catch (error) {
+            console.error('Error loading current user:', error);
+        }
+    }
 
     // 기본 날짜 범위 설정 (최근 1개월)
     function setupDefaultDateRange() {
@@ -236,6 +267,29 @@
         }
     }
 
+    // 제품 목록 로드
+    async function loadProducts() {
+        try {
+            const response = await fetch('/api/products', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                allProducts = await response.json();
+                const productSelect = document.getElementById('productFilter');
+                
+                allProducts.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = product.name;
+                    productSelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
     // 이벤트 리스너 설정
     function setupEventListeners() {
         // 필터 폼 제출
@@ -250,6 +304,8 @@
             setupDefaultDateRange();
             document.getElementById('supplierFilter').value = '';
             document.getElementById('transactionType').value = '';
+            document.getElementById('productFilter').value = '';
+            document.getElementById('productSearch').value = '';
             currentPage = 1;
             loadTransactions();
         });
@@ -274,11 +330,47 @@
 
         // 엑셀 다운로드
         document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+
+        // 제품명 검색 기능
+        document.getElementById('productSearch').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const productSelect = document.getElementById('productFilter');
+            const options = productSelect.querySelectorAll('option');
+            
+            // 모든 옵션을 숨김
+            options.forEach(option => {
+                if (option.value === '') {
+                    option.style.display = 'block'; // "전체 제품" 옵션은 항상 표시
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+            
+            // 검색어와 일치하는 옵션만 표시
+            if (searchTerm) {
+                options.forEach(option => {
+                    if (option.value !== '' && option.textContent.toLowerCase().includes(searchTerm)) {
+                        option.style.display = 'block';
+                    }
+                });
+            } else {
+                // 검색어가 없으면 모든 옵션 표시
+                options.forEach(option => {
+                    option.style.display = 'block';
+                });
+            }
+        });
     }
 
     // 거래 내역 로드
     async function loadTransactions() {
         showLoading();
+        
+        // 사용자 정보가 로드되지 않았다면 다시 시도
+        if (!currentUser) {
+            console.log('사용자 정보가 없어서 다시 로드 시도');
+            await loadCurrentUser();
+        }
         
         const formData = new FormData(document.getElementById('filterForm'));
         currentFilters = {
@@ -286,6 +378,8 @@
             date_to: formData.get('date_to'),
             supplier_id: formData.get('supplier_id'),
             transaction_type: formData.get('transaction_type'),
+            product_id: formData.get('product_id'),
+            product_search: formData.get('product_search'),
             page: currentPage
         };
 
@@ -323,6 +417,7 @@
         hideLoading();
         
         console.log('거래 내역 표시 함수 호출:', data);
+        console.log('현재 사용자 정보 (표시 시점):', currentUser);
         
         if (!data.recent_transactions || data.recent_transactions.length === 0) {
             console.log('거래 내역이 없음');
@@ -345,11 +440,14 @@
     // 테이블 뷰 표시
     function displayTableView(transactions) {
         console.log('테이블 뷰 표시 시작, 거래 내역 개수:', transactions.length);
+        console.log('현재 사용자 정보:', currentUser);
+        
         const tbody = document.getElementById('transactionsTableBody');
         tbody.innerHTML = '';
 
         transactions.forEach((transaction, index) => {
             console.log(`거래 내역 ${index + 1}:`, transaction);
+            console.log(`작업자 정보 - user:`, transaction.user, 'user_id:', transaction.user_id);
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${formatDateTime(transaction.created_at)}</td>
@@ -364,6 +462,14 @@
                 <td>${transaction.supplier ? transaction.supplier.name : '-'}</td>
                 <td>${transaction.user ? transaction.user.full_name : 'N/A'}</td>
                 <td>${transaction.notes || '-'}</td>
+                <td>
+                    ${currentUser && currentUser.is_admin ? 
+                        `<button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
+                            <i class="fas fa-trash"></i>
+                        </button>` : 
+                        '<span class="text-muted">-</span>'
+                    }
+                </td>
             `;
             tbody.appendChild(row);
         });
@@ -372,10 +478,15 @@
 
     // 카드 뷰 표시
     function displayCardView(transactions) {
+        console.log('카드 뷰 표시 시작, 거래 내역 개수:', transactions.length);
+        console.log('현재 사용자 정보:', currentUser);
+        
         const cardBody = document.getElementById('transactionsCardBody');
         cardBody.innerHTML = '';
 
         transactions.forEach(transaction => {
+            console.log(`카드 뷰 거래 내역:`, transaction);
+            console.log(`카드 뷰 작업자 정보 - user:`, transaction.user, 'user_id:', transaction.user_id);
             const card = document.createElement('div');
             card.className = 'col-md-6 col-lg-4 mb-3';
             card.innerHTML = `
@@ -384,7 +495,15 @@
                         <span class="badge ${transaction.transaction_type === 'in' ? 'bg-success' : 'bg-warning'}">
                             ${transaction.transaction_type === 'in' ? '입고' : '출고'}
                         </span>
-                        <small class="text-muted">${formatDateTime(transaction.created_at)}</small>
+                        <div class="d-flex align-items-center gap-2">
+                            <small class="text-muted">${formatDateTime(transaction.created_at)}</small>
+                            ${currentUser && currentUser.is_admin ? 
+                                `<button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
+                                    <i class="fas fa-trash"></i>
+                                </button>` : 
+                                ''
+                            }
+                        </div>
                     </div>
                     <div class="card-body">
                         <h6 class="card-title">${transaction.product.name}</h6>
@@ -392,7 +511,7 @@
                             <strong>수량:</strong> ${formatNumber(transaction.quantity)}<br>
                             <strong>LOT:</strong> ${transaction.lot_number || '-'}<br>
                             <strong>거래처:</strong> ${transaction.supplier ? transaction.supplier.name : '-'}<br>
-                            <strong>담당자:</strong> ${transaction.user.full_name}
+                            <strong>작업자:</strong> ${transaction.user.full_name}
                         </p>
                         ${transaction.notes ? `<p class="card-text"><small class="text-muted">${transaction.notes}</small></p>` : ''}
                     </div>
@@ -400,6 +519,7 @@
             `;
             cardBody.appendChild(card);
         });
+        console.log('카드 뷰 표시 완료');
     }
 
     // 통계 업데이트
@@ -502,6 +622,46 @@
 
     function formatNumber(num) {
         return new Intl.NumberFormat('ko-KR').format(num);
+    }
+
+    // 거래 내역 삭제
+    async function deleteTransaction(transactionId) {
+        // 관리자 권한 확인
+        if (!currentUser || !currentUser.is_admin) {
+            alert('관리자 권한이 필요합니다.');
+            return;
+        }
+
+        if (!confirm('정말로 이 거래 내역을 삭제하시겠습니까?\n\n주의: 삭제된 거래 내역은 복구할 수 없습니다.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/transactions/${transactionId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                alert('거래 내역이 삭제되었습니다.');
+                // 현재 페이지의 거래 내역 다시 로드
+                loadTransactions();
+            } else {
+                let errorMessage = '알 수 없는 오류가 발생했습니다.';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorMessage;
+                } catch (e) {
+                    // JSON 파싱 실패 시 응답 텍스트 사용
+                    const errorText = await response.text();
+                    errorMessage = errorText || errorMessage;
+                }
+                alert(`삭제 실패: ${errorMessage}`);
+            }
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+            alert('거래 내역 삭제 중 오류가 발생했습니다.');
+        }
     }
 </script>
 {% endblock %}

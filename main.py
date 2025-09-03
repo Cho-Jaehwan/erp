@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 import uvicorn
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -12,8 +12,8 @@ import io
 import csv
 import pytz
 
-from database import get_db, engine, Base
-from models import User, Product, StockTransaction, Supplier
+from database import get_db, engine
+from models import User, Product, StockTransaction, Supplier, AuditLog, Base
 from auth import get_current_user, get_current_admin, create_access_token, create_refresh_token, verify_password, get_password_hash
 from schemas import UserCreate, UserLogin, ProductCreate, ProductUpdate, StockTransactionCreate, SupplierCreate, SupplierUpdate, BulkStockOutCreate
 import subprocess
@@ -25,12 +25,19 @@ def check_database_exists():
     db_path = os.path.join(DB_DIR, "erp_system.db")
     return os.path.exists(db_path)
 
+def check_audit_logs_table_exists():
+    """audit_logs 테이블 존재 여부 확인"""
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        db.execute(text("SELECT 1 FROM audit_logs LIMIT 1"))
+        db.close()
+        return True
+    except Exception:
+        return False
+
 def initialize_database():
-    """데이터베이스 초기화"""
-    # 먼저 테이블 생성 (데이터베이스 파일이 없어도 생성됨)
-    print("데이터베이스 테이블을 생성합니다...")
-    Base.metadata.create_all(bind=engine)
-    print("데이터베이스 테이블 생성 완료")
+    """데이터베이스 초기화"""  # 먼저 테이블 생성 (데이터베이스 파일이 없어도 생성됨)  
     
     if not check_database_exists():
         print("데이터베이스가 없습니다. 초기화를 시작합니다...")
@@ -46,11 +53,19 @@ def initialize_database():
             sys.exit(1)
     else:
         print("기존 데이터베이스를 사용합니다.")
+        init_audit_logs_table()
+
+def init_audit_logs_table():
+    """감사 로그 테이블 생성"""
+    if not check_audit_logs_table_exists():
+        print("감사 로그 테이블이 없습니다. 생성합니다.")
+        Base.metadata.create_all(bind=engine)
+        print("감사 로그 테이블 생성 완료")
 
 # 애플리케이션 시작 전 데이터베이스 초기화
 initialize_database()
 
-app = FastAPI(title="ERP System", description="웹 기반 ERP 시스템")
+app = FastAPI(title="웹 기반 재고관리 시스템", description="웹 기반 재고관리 시스템")
 
 # 서울 시간대 설정
 SEOUL_TZ = pytz.timezone('Asia/Seoul')
@@ -258,8 +273,8 @@ async def dashboard(request: Request, access_token: str = Cookie(None)):
     total_transactions = db.query(StockTransaction).count()
     total_stock = db.query(func.sum(Product.stock_quantity)).scalar() or 0
     
-    # 최근 거래 내역
-    recent_transactions = db.query(StockTransaction).order_by(StockTransaction.created_at.desc()).limit(10).all()
+    # 최근 거래 내역 (거래처 정보 포함)
+    recent_transactions = db.query(StockTransaction).join(Product).join(User).outerjoin(Supplier).order_by(StockTransaction.created_at.desc()).limit(10).all()
     
     # 카테고리별 재고
     categories = db.query(Product.category, func.sum(Product.stock_quantity)).group_by(Product.category).all()
@@ -311,6 +326,25 @@ async def admin_page(request: Request, access_token: str = Cookie(None)):
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "pending_users": pending_users
+    })
+
+# 감사 로그 페이지
+@app.get("/audit-logs", response_class=HTMLResponse)
+async def audit_logs_page(request: Request, access_token: str = Cookie(None)):
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    # 관리자 권한 확인
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다"
+        )
+    
+    return templates.TemplateResponse("audit_logs.html", {
+        "request": request,
+        "user": user
     })
 
 # 사용자 승인
@@ -892,6 +926,8 @@ async def get_filtered_transactions(
     date_to: Optional[str] = None,
     supplier_id: Optional[int] = None,
     transaction_type: Optional[str] = None,
+    product_id: Optional[int] = None,
+    product_search: Optional[str] = None,
     page: int = 1,
     per_page: int = 20,
     access_token: str = Cookie(None),
@@ -929,6 +965,14 @@ async def get_filtered_transactions(
     if transaction_type:
         query = query.filter(StockTransaction.transaction_type == transaction_type)
     
+    # 제품 ID 필터
+    if product_id:
+        query = query.filter(StockTransaction.product_id == product_id)
+    
+    # 제품명 검색 필터
+    if product_search:
+        query = query.filter(Product.name.contains(product_search))
+    
     # 전체 개수 계산
     total_transactions = query.count()
     total_pages = (total_transactions + per_page - 1) // per_page
@@ -939,7 +983,7 @@ async def get_filtered_transactions(
     
     print(f"DEBUG: 거래 내역 조회 결과 - 총 개수: {total_transactions}, 현재 페이지: {page}, 조회된 거래 내역: {len(transactions)}")
     for i, transaction in enumerate(transactions):
-        print(f"DEBUG: 거래 내역 {i+1} - ID: {transaction.id}, 제품: {transaction.product.name if transaction.product else 'N/A'}, 유형: {transaction.transaction_type}, 수량: {transaction.quantity}, 날짜: {transaction.created_at}")
+        print(f"DEBUG: 거래 내역 {i+1} - ID: {transaction.id}, 제품: {transaction.product.name if transaction.product else 'N/A'}, 유형: {transaction.transaction_type}, 수량: {transaction.quantity}, 거래처: {transaction.supplier.name if transaction.supplier else 'None'}, 작업자: {transaction.user.full_name if transaction.user else 'None'}, 작업자ID: {transaction.user_id}, 날짜: {transaction.created_at}")
     
     # 통계 계산
     stats_query = db.query(StockTransaction)
@@ -956,6 +1000,10 @@ async def get_filtered_transactions(
         stats_query = stats_query.filter(StockTransaction.supplier_id == supplier_id)
     if transaction_type:
         stats_query = stats_query.filter(StockTransaction.transaction_type == transaction_type)
+    if product_id:
+        stats_query = stats_query.filter(StockTransaction.product_id == product_id)
+    if product_search:
+        stats_query = stats_query.join(Product).filter(Product.name.contains(product_search))
     
     # 입고/출고 수량 통계
     in_quantity = stats_query.filter(StockTransaction.transaction_type == "in").with_entities(func.sum(StockTransaction.quantity)).scalar() or 0
@@ -973,6 +1021,236 @@ async def get_filtered_transactions(
         "total_out_quantity": out_quantity,
         "total_suppliers": total_suppliers
     }
+
+# 거래 내역 삭제 API
+@app.delete("/api/transactions/{transaction_id}")
+async def delete_transaction(
+    transaction_id: int, 
+    request: Request,
+    access_token: str = Cookie(None), 
+    db: Session = Depends(get_db)
+):
+    print(f"DEBUG: 거래 내역 삭제 요청 - ID: {transaction_id}")
+    
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        print("DEBUG: 인증 실패")
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # 관리자 권한 확인
+    if not user.is_admin:
+        print(f"DEBUG: 관리자 권한 없음 - 사용자: {user.username}")
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    
+    print(f"DEBUG: 관리자 인증 성공 - 사용자: {user.username}")
+    
+    # 거래 내역 조회
+    transaction = db.query(StockTransaction).filter(StockTransaction.id == transaction_id).first()
+    if not transaction:
+        print(f"DEBUG: 거래 내역을 찾을 수 없음 - ID: {transaction_id}")
+        raise HTTPException(status_code=404, detail="거래 내역을 찾을 수 없습니다")
+    
+    print(f"DEBUG: 거래 내역 발견 - ID: {transaction.id}, 제품: {transaction.product_id}, 유형: {transaction.transaction_type}, 수량: {transaction.quantity}")
+    
+    # 제품 정보 조회
+    product = db.query(Product).filter(Product.id == transaction.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="관련 제품을 찾을 수 없습니다")
+    
+    # 삭제 전 정보 저장 (로그용)
+    transaction_details = {
+        "product_name": product.name,
+        "product_id": transaction.product_id,
+        "transaction_type": transaction.transaction_type,
+        "quantity": transaction.quantity,
+        "lot_number": transaction.lot_number,
+        "supplier_name": transaction.supplier.name if transaction.supplier else None,
+        "supplier_id": transaction.supplier_id,
+        "original_user": transaction.user.full_name if transaction.user else None,
+        "original_user_id": transaction.user_id,
+        "notes": transaction.notes,
+        "created_at": transaction.created_at.isoformat() if transaction.created_at else None,
+        "stock_before": product.stock_quantity
+    }
+    
+    # 재고 수량 복원 (삭제 시 반대 작업 수행)
+    if transaction.transaction_type == "in":
+        # 입고 거래 삭제 시 재고 감소
+        if product.stock_quantity < transaction.quantity:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"재고가 부족하여 삭제할 수 없습니다. (현재 재고: {product.stock_quantity}개, 삭제할 수량: {transaction.quantity}개)"
+            )
+        product.stock_quantity -= transaction.quantity
+    else:
+        # 출고 거래 삭제 시 재고 증가
+        product.stock_quantity += transaction.quantity
+    
+    # 삭제 후 재고 정보 추가
+    transaction_details["stock_after"] = product.stock_quantity
+    
+    # 거래 내역 삭제
+    db.delete(transaction)
+    
+    # 감사 로그 기록 (테이블이 있을 때만)
+    try:
+        import json
+        audit_log = AuditLog(
+            user_id=user.id,
+            action="DELETE_TRANSACTION",
+            target_type="StockTransaction",
+            target_id=transaction_id,
+            details=json.dumps(transaction_details, ensure_ascii=False),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=get_seoul_time()  # 서울 시간으로 명시적 설정
+        )
+        db.add(audit_log)
+        print(f"DEBUG: 감사 로그 기록 완료 - 관리자: {user.username}")
+    except Exception as e:
+        print(f"DEBUG: 감사 로그 기록 실패 (테이블 없음): {e}")
+        # 감사 로그 기록 실패해도 거래 내역 삭제는 계속 진행
+    
+    db.commit()
+    
+    print(f"DEBUG: 거래 내역 삭제 완료 - ID: {transaction_id}, 관리자: {user.username}")
+    
+    return {"message": "거래 내역이 삭제되었습니다"}
+
+# audit_logs 테이블 생성 API
+@app.post("/api/debug/create-audit-logs-table")
+async def create_audit_logs_table(access_token: str = Cookie(None), db: Session = Depends(get_db)):
+    """audit_logs 테이블을 수동으로 생성합니다."""
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # 관리자 권한 확인
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    
+    try:
+        # audit_logs 테이블을 직접 SQL로 생성
+        create_table_sql = """
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            target_type VARCHAR(50) NOT NULL,
+            target_id INTEGER,
+            details TEXT,
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+        """
+        db.execute(create_table_sql)
+        db.commit()
+        
+        # 인덱스 생성
+        db.execute("CREATE INDEX IF NOT EXISTS ix_audit_logs_id ON audit_logs (id)")
+        db.execute("CREATE INDEX IF NOT EXISTS ix_audit_logs_user_id ON audit_logs (user_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS ix_audit_logs_created_at ON audit_logs (created_at)")
+        db.commit()
+        
+        return {"message": "audit_logs 테이블이 성공적으로 생성되었습니다"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테이블 생성 실패: {str(e)}")
+
+# 거래 내역 디버깅 API (임시)
+@app.get("/api/debug/transactions")
+async def debug_transactions(access_token: str = Cookie(None), db: Session = Depends(get_db)):
+    """거래 내역 디버깅 정보를 반환합니다."""
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    transactions = db.query(StockTransaction).join(User).all()
+    result = []
+    for t in transactions:
+        result.append({
+            "id": t.id,
+            "product_id": t.product_id,
+            "user_id": t.user_id,
+            "user_name": t.user.full_name if t.user else None,
+            "transaction_type": t.transaction_type,
+            "quantity": t.quantity,
+            "created_at": t.created_at.isoformat() if t.created_at else None
+        })
+    
+    return {"transactions": result, "count": len(result)}
+
+# 감사 로그 조회 API
+@app.get("/api/audit-logs")
+async def get_audit_logs(
+    page: int = 1,
+    per_page: int = 20,
+    access_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """감사 로그를 조회합니다. (관리자만 접근 가능)"""
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # 관리자 권한 확인
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    
+    try:
+        # 감사 로그 조회
+        query = db.query(AuditLog).join(User).order_by(AuditLog.created_at.desc())
+        
+        # 전체 개수 계산
+        total_logs = query.count()
+        total_pages = (total_logs + per_page - 1) // per_page
+        
+        # 페이지네이션 적용
+        offset = (page - 1) * per_page
+        logs = query.offset(offset).limit(per_page).all()
+        
+        result = []
+        for log in logs:
+            # 기존 데이터는 UTC로 저장되어 있을 수 있으므로 서울 시간대로 변환
+            formatted_time = None
+            if log.created_at:
+                if log.created_at.tzinfo is None:
+                    # naive datetime인 경우 UTC로 가정하고 서울 시간대로 변환
+                    utc_time = pytz.UTC.localize(log.created_at)
+                    formatted_time = utc_time.astimezone(SEOUL_TZ).isoformat()
+                else:
+                    # 이미 시간대 정보가 있는 경우 서울 시간대로 변환
+                    formatted_time = log.created_at.astimezone(SEOUL_TZ).isoformat()
+            
+            result.append({
+                "id": log.id,
+                "user_name": log.user.full_name,
+                "user_username": log.user.username,
+                "action": log.action,
+                "target_type": log.target_type,
+                "target_id": log.target_id,
+                "details": log.details,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "created_at": formatted_time
+            })
+        
+        return {
+            "logs": result,
+            "total_logs": total_logs,
+            "total_pages": total_pages,
+            "current_page": page
+        }
+    except Exception as e:
+        return {
+            "logs": [],
+            "total_logs": 0,
+            "total_pages": 0,
+            "current_page": page,
+            "error": f"감사 로그 조회 실패: {str(e)}",
+            "message": "audit_logs 테이블이 아직 생성되지 않았습니다."
+        }
 
 # 시간대 디버깅 API
 @app.get("/api/debug/timezone")
@@ -1001,6 +1279,8 @@ async def export_transactions(
     date_to: Optional[str] = None,
     supplier_id: Optional[int] = None,
     transaction_type: Optional[str] = None,
+    product_id: Optional[int] = None,
+    product_search: Optional[str] = None,
     access_token: str = Cookie(None),
     db: Session = Depends(get_db)
 ):
@@ -1034,6 +1314,14 @@ async def export_transactions(
     # 거래 유형 필터
     if transaction_type:
         query = query.filter(StockTransaction.transaction_type == transaction_type)
+    
+    # 제품 ID 필터
+    if product_id:
+        query = query.filter(StockTransaction.product_id == product_id)
+    
+    # 제품명 검색 필터
+    if product_search:
+        query = query.filter(Product.name.contains(product_search))
     
     # 모든 거래 내역 조회
     transactions = query.order_by(StockTransaction.created_at.desc()).all()

@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}관리자 페이지 - ERP 시스템{% endblock %}
+{% block title %}관리자 페이지 - 재고관리 시스템{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">
-            <i class="fas fa-user-shield me-2"></i>관리자 페이지
-        </h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">
+                <i class="fas fa-user-shield me-2"></i>관리자 페이지
+            </h1>
+            <div>
+                <a href="/audit-logs" class="btn btn-outline-info">
+                    <i class="fas fa-clipboard-list me-1"></i>감사 로그
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 

@@ -22,12 +22,12 @@ def check_tables_exist():
     """테이블 존재 여부 확인"""
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    required_tables = ['users', 'products', 'suppliers', 'stock_transactions']
+    required_tables = ['users', 'products', 'suppliers', 'stock_transactions', 'audit_logs']
     return all(table in existing_tables for table in required_tables)
 
 def create_admin_user():
     """관리자 계정 생성"""
-    print("=== ERP 시스템 초기화 시작 ===")
+    print("=== 재고관리 시스템 초기화 시작 ===")
     
     # 데이터베이스 파일 존재 여부 확인
     db_exists = check_database_exists()
@@ -81,7 +81,7 @@ def create_admin_user():
     finally:
         db.close()
     
-    print("=== ERP 시스템 초기화 완료 ===")
+    print("=== 재고관리 시스템 초기화 완료 ===")
 
 def main():
     """메인 함수"""

@@ -73,3 +73,19 @@ class StockTransaction(Base):
     product = relationship("Product", back_populates="stock_transactions")
     user = relationship("User", back_populates="stock_transactions")
     supplier = relationship("Supplier", back_populates="stock_transactions")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(50), nullable=False)  # "DELETE_TRANSACTION", "CREATE_TRANSACTION" 등
+    target_type = Column(String(50), nullable=False)  # "StockTransaction", "Product" 등
+    target_id = Column(Integer, nullable=True)  # 대상 객체의 ID
+    details = Column(Text)  # 상세 정보 (JSON 형태)
+    ip_address = Column(String(45))  # IPv4 또는 IPv6
+    user_agent = Column(Text)  # 브라우저 정보
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 관계
+    user = relationship("User")

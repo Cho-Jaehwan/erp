@@ -29,7 +29,7 @@ EXPOSE 8100
 
 # 초기화 스크립트 생성
 RUN echo '#!/bin/bash\n\
-echo "=== ERP 시스템 시작 ==="\n\
+echo "=== 재고관리 시스템 시작 ==="\n\
 echo "데이터베이스 초기화 중..."\n\
 python init_admin.py\n\
 echo "웹 서버 시작 중..."\n\
