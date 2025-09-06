@@ -31,11 +31,23 @@
                         <label for="productSelect" class="form-label">제품 선택</label>
                         <select class="form-select" id="productSelect" name="product_id" required>
                             <option value="">제품을 선택하세요</option>
+                            {% set current_category = "" %}
                             {% for product in products %}
-                            {% if product.stock_quantity > 0 %}
-                            <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
-                            {% endif %}
+                                {% if product.stock_quantity > 0 %}
+                                    {% set product_category = product.category or '미분류' %}
+                                    {% if product_category != current_category %}
+                                        {% if current_category != "" %}
+                                            </optgroup>
+                                        {% endif %}
+                                        {% set current_category = product_category %}
+                                        <optgroup label="{{ current_category }}">
+                                    {% endif %}
+                                    <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
+                                {% endif %}
                             {% endfor %}
+                            {% if current_category != "" %}
+                                </optgroup>
+                            {% endif %}
                         </select>
                     </div>
                     
@@ -48,7 +60,8 @@
                     
                     <div class="mb-3">
                         <label for="quantity" class="form-label">출고 수량</label>
-                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" max="999999" required>
+                        <div class="form-text">선택한 LOT의 재고를 초과할 수 없습니다.</div>
                     </div>
                     
                     <div class="mb-3">
@@ -179,11 +192,13 @@
     let allProducts = [];
     let bulkProducts = [];
     let productCounter = 0;
+    let categoryOrders = {};
 
     // 페이지 로드 시 출고처 목록 로드
     document.addEventListener('DOMContentLoaded', function() {
         loadSuppliers();
         loadProducts();
+        loadCategoryOrders();
         setupModeToggle();
         setupBulkForm();
     });
@@ -196,10 +211,27 @@
             });
             
             if (response.ok) {
-                allProducts = await response.json();
+                const data = await response.json();
+                allProducts = data.products || [];
             }
         } catch (error) {
             console.error('Error loading products:', error);
+        }
+    }
+
+    // 카테고리 순서 로드
+    async function loadCategoryOrders() {
+        try {
+            const response = await fetch('/api/categories/order', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                categoryOrders = data.category_orders || {};
+            }
+        } catch (error) {
+            console.error('Error loading category orders:', error);
         }
     }
 
@@ -211,7 +243,8 @@
             });
             
             if (response.ok) {
-                const suppliers = await response.json();
+                const data = await response.json();
+                const suppliers = data.suppliers || [];
                 const supplierSelect = document.getElementById('supplier_id');
                 const bulkSupplierSelect = document.getElementById('bulkSupplierId');
                 
@@ -271,15 +304,38 @@
         const row = document.createElement('tr');
         row.id = `product-row-${productCounter}`;
         
-        const availableProducts = allProducts.filter(p => p.stock_quantity > 0);
+        const availableProducts = allProducts.filter(p => (p.stock_quantity || 0) > 0);
+        
+        // 카테고리별로 제품 그룹화
+        const productsByCategory = {};
+        availableProducts.forEach(p => {
+            const category = p.category || '미분류';
+            if (!productsByCategory[category]) {
+                productsByCategory[category] = [];
+            }
+            productsByCategory[category].push(p);
+        });
+        
+        // 카테고리 순서대로 정렬 (서버의 카테고리 순서 적용)
+        const sortedCategories = Object.keys(productsByCategory).sort((a, b) => {
+            const orderA = categoryOrders[a] || 999;
+            const orderB = categoryOrders[b] || 999;
+            return orderA - orderB;
+        });
+        
+        let optionsHtml = '<option value="">제품 선택</option>';
+        sortedCategories.forEach(category => {
+            optionsHtml += `<optgroup label="${category}">`;
+            productsByCategory[category].forEach(p => {
+                optionsHtml += `<option value="${p.id}" data-stock="${p.stock_quantity || 0}">${p.name}</option>`;
+            });
+            optionsHtml += '</optgroup>';
+        });
         
         row.innerHTML = `
             <td>
                 <select class="form-select form-select-sm product-select" data-counter="${productCounter}" required>
-                    <option value="">제품 선택</option>
-                    ${availableProducts.map(p => 
-                        `<option value="${p.id}" data-stock="${p.stock_quantity}">${p.name}</option>`
-                    ).join('')}
+                    ${optionsHtml}
                 </select>
             </td>
             <td class="stock-display">-</td>
@@ -312,8 +368,47 @@
             loadLotsForProduct(this.value, lotSelect);
         });
         
-        quantityInput.addEventListener('input', function() {
+        lotSelect.addEventListener('change', function() {
+            // LOT 선택 시 수량 제한 검증
+            if (this.value && this.selectedIndex > 0) {
+                const selectedLotOption = this.options[this.selectedIndex];
+                const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+                const outQuantity = parseInt(quantityInput.value) || 0;
+                
+                // LOT 재고를 초과하는 경우 수량을 자동으로 제한
+                if (outQuantity > lotStock) {
+                    quantityInput.value = lotStock;
+                    alert(`LOT ${this.value}의 재고가 부족합니다. 수량을 ${lotStock}개로 제한했습니다.`);
+                }
+            }
+            
+            // 재고 표시 업데이트
             updateStockDisplay(productSelect);
+        });
+        
+        quantityInput.addEventListener('input', function() {
+            // LOT별 수량 제한 검증
+            const lotSelect = row.querySelector('.lot-select');
+            if (lotSelect && lotSelect.value && lotSelect.selectedIndex > 0) {
+                const selectedLotOption = lotSelect.options[lotSelect.selectedIndex];
+                const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+                const outQuantity = parseInt(this.value) || 0;
+                
+                // LOT 재고를 초과하는 경우 수량을 자동으로 제한
+                if (outQuantity > lotStock) {
+                    this.value = lotStock;
+                    alert(`LOT ${lotSelect.value}의 재고가 부족합니다. 수량을 ${lotStock}개로 제한했습니다.`);
+                }
+            }
+            
+            // 모든 행의 재고 표시를 업데이트 (동일한 제품의 경우)
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                if (pSelect && pSelect.value) {
+                    updateStockDisplay(pSelect);
+                }
+            });
         });
         
         productCounter++;
@@ -324,10 +419,19 @@
         const row = document.getElementById(`product-row-${counter}`);
         if (row) {
             row.remove();
+            
+            // 모든 행의 재고 표시를 업데이트 (동일한 제품의 경우)
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                if (pSelect && pSelect.value) {
+                    updateStockDisplay(pSelect);
+                }
+            });
         }
     }
 
-    // 재고 표시 업데이트
+    // 재고 표시 업데이트 (동일한 제품의 누적 출고량 반영)
     function updateStockDisplay(productSelect) {
         const row = productSelect.closest('tr');
         const stockDisplay = row.querySelector('.stock-display');
@@ -335,11 +439,24 @@
         
         if (productSelect.value) {
             const selectedOption = productSelect.options[productSelect.selectedIndex];
-            const stock = parseInt(selectedOption.dataset.stock);
-            const quantity = parseInt(quantityInput.value) || 0;
-            const afterStock = stock - quantity;
+            const originalStock = parseInt(selectedOption.dataset.stock);
             
-            stockDisplay.textContent = `${stock} → ${afterStock}`;
+            // 동일한 제품의 모든 행에서 출고량 누적 계산
+            const productId = parseInt(productSelect.value);
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            let totalOutQuantity = 0;
+            
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                const qInput = r.querySelector('.quantity-input');
+                if (pSelect && qInput && parseInt(pSelect.value) === productId) {
+                    totalOutQuantity += parseInt(qInput.value) || 0;
+                }
+            });
+            
+            const afterStock = originalStock - totalOutQuantity;
+            
+            stockDisplay.textContent = `${originalStock} → ${afterStock}`;
             stockDisplay.className = `stock-display ${afterStock < 0 ? 'text-danger' : 'text-success'}`;
         } else {
             stockDisplay.textContent = '-';
@@ -369,6 +486,21 @@
                     option.textContent = `${lot.lot_number} (재고: ${lot.quantity}개)`;
                     option.dataset.quantity = lot.quantity;
                     lotSelect.appendChild(option);
+                });
+                
+                // LOT 선택 시 수량 입력 필드의 max 값 설정
+                lotSelect.addEventListener('change', function() {
+                    const row = this.closest('tr');
+                    const quantityInput = row.querySelector('.quantity-input');
+                    if (this.value && this.selectedIndex > 0) {
+                        const selectedLotOption = this.options[this.selectedIndex];
+                        const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+                        quantityInput.max = lotStock;
+                        quantityInput.placeholder = `최대 ${lotStock}개`;
+                    } else {
+                        quantityInput.max = 999999;
+                        quantityInput.placeholder = '';
+                    }
                 });
             } else {
                 lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
@@ -432,6 +564,20 @@
                         option.dataset.quantity = lot.quantity;
                         lotSelect.appendChild(option);
                     });
+                    
+                    // LOT 선택 시 수량 입력 필드의 max 값 설정
+                    lotSelect.addEventListener('change', function() {
+                        const quantityInput = document.getElementById('quantity');
+                        if (this.value && this.selectedIndex > 0) {
+                            const selectedLotOption = this.options[this.selectedIndex];
+                            const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
+                            quantityInput.max = lotStock;
+                            quantityInput.placeholder = `최대 ${lotStock}개까지 출고 가능`;
+                        } else {
+                            quantityInput.max = 999999;
+                            quantityInput.placeholder = '';
+                        }
+                    });
                 } else {
                     lotSelect.innerHTML = '<option value="">LOT 정보를 불러올 수 없습니다</option>';
                 }
@@ -456,8 +602,32 @@
             const outQuantity = parseInt(this.value) || 0;
             const afterStock = lotStock - outQuantity;
             
+            // LOT 재고를 초과하는 경우 수량을 자동으로 제한
+            if (outQuantity > lotStock) {
+                this.value = lotStock;
+                const correctedAfterStock = lotStock - lotStock;
+                afterStockElement.textContent = correctedAfterStock;
+                afterStockElement.parentElement.className = 'alert alert-warning';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${correctedAfterStock}</strong>개</small>
+                    <br><small class="text-warning">⚠️ 입력한 수량이 LOT 재고를 초과하여 ${lotStock}개로 제한되었습니다.</small>
+                `;
+                return;
+            }
+            
             afterStockElement.textContent = afterStock;
-            afterStockElement.parentElement.className = afterStock < 0 ? 'alert alert-danger' : 'alert alert-info';
+            if (afterStock < 0) {
+                afterStockElement.parentElement.className = 'alert alert-danger';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${afterStock}</strong>개</small>
+                    <br><small class="text-danger">⚠️ LOT 재고를 초과합니다!</small>
+                `;
+            } else {
+                afterStockElement.parentElement.className = 'alert alert-info';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${afterStock}</strong>개</small>
+                `;
+            }
         }
     });
     
@@ -470,10 +640,34 @@
             const selectedLotOption = this.options[this.selectedIndex];
             const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
             const outQuantity = parseInt(quantityInput.value) || 0;
-            const afterStock = lotStock - outQuantity;
             
+            // LOT 재고를 초과하는 경우 수량을 자동으로 제한
+            if (outQuantity > lotStock) {
+                quantityInput.value = lotStock;
+                const correctedAfterStock = lotStock - lotStock;
+                afterStockElement.textContent = correctedAfterStock;
+                afterStockElement.parentElement.className = 'alert alert-warning';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${correctedAfterStock}</strong>개</small>
+                    <br><small class="text-warning">⚠️ 입력한 수량이 LOT 재고를 초과하여 ${lotStock}개로 제한되었습니다.</small>
+                `;
+                return;
+            }
+            
+            const afterStock = lotStock - outQuantity;
             afterStockElement.textContent = afterStock;
-            afterStockElement.parentElement.className = afterStock < 0 ? 'alert alert-danger' : 'alert alert-info';
+            if (afterStock < 0) {
+                afterStockElement.parentElement.className = 'alert alert-danger';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${afterStock}</strong>개</small>
+                    <br><small class="text-danger">⚠️ LOT 재고를 초과합니다!</small>
+                `;
+            } else {
+                afterStockElement.parentElement.className = 'alert alert-info';
+                afterStockElement.parentElement.innerHTML = `
+                    <small>출고 후 재고: <strong>${afterStock}</strong>개</small>
+                `;
+            }
         }
     });
     
@@ -490,6 +684,7 @@
         const items = [];
         let hasError = false;
         
+        // 1단계: 기본 데이터 수집 및 검증
         for (const row of rows) {
             const productSelect = row.querySelector('.product-select');
             const lotSelect = row.querySelector('.lot-select');
@@ -508,24 +703,65 @@
                 break;
             }
             
-            // LOT별 재고 확인
-            if (lotSelect.value && lotSelect.selectedIndex > 0) {
-                const selectedLotOption = lotSelect.options[lotSelect.selectedIndex];
-                const lotStock = parseInt(selectedLotOption.dataset.quantity) || 0;
-                
-                if (quantity > lotStock) {
-                    const productName = productSelect.options[productSelect.selectedIndex].text;
-                    alert(`제품 "${productName}"의 LOT ${lotSelect.value} 재고가 부족합니다. (LOT 재고: ${lotStock}개, 요청 수량: ${quantity}개)`);
-                    hasError = true;
-                    break;
-                }
-            }
-            
             items.push({
                 product_id: parseInt(productSelect.value),
                 quantity: quantity,
-                lot_number: lotSelect.value || null
+                lot_number: lotSelect.value || null,
+                product_name: productSelect.options[productSelect.selectedIndex].text
             });
+        }
+        
+        if (hasError) return;
+        
+        // 2단계: LOT별 재고 집계 및 검증
+        const lotTotals = {}; // (product_id, lot_number) -> {total_quantity, product_name}
+        
+        for (const item of items) {
+            if (item.lot_number) {
+                const lotKey = `${item.product_id}_${item.lot_number}`;
+                if (!lotTotals[lotKey]) {
+                    lotTotals[lotKey] = {
+                        total_quantity: 0,
+                        product_name: item.product_name,
+                        lot_number: item.lot_number
+                    };
+                }
+                lotTotals[lotKey].total_quantity += item.quantity;
+            }
+        }
+        
+        // 3단계: LOT별 재고 확인
+        for (const [lotKey, lotData] of Object.entries(lotTotals)) {
+            const [productId, lotNumber] = lotKey.split('_');
+            
+            // 해당 LOT의 현재 재고 조회
+            try {
+                const lotResponse = await fetch(`/api/products/${productId}/lots`, {
+                    credentials: 'include'
+                });
+                
+                if (lotResponse.ok) {
+                    const lots = await lotResponse.json();
+                    const targetLot = lots.find(lot => lot.lot_number === lotNumber);
+                    
+                    if (targetLot) {
+                        if (lotData.total_quantity > targetLot.quantity) {
+                            alert(`제품 "${lotData.product_name}"의 LOT ${lotNumber} 재고가 부족합니다.\n(LOT 재고: ${targetLot.quantity}개, 총 출고 수량: ${lotData.total_quantity}개)`);
+                            hasError = true;
+                            break;
+                        }
+                    } else {
+                        alert(`제품 "${lotData.product_name}"의 LOT ${lotNumber} 정보를 찾을 수 없습니다.`);
+                        hasError = true;
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error('LOT 재고 확인 중 오류:', error);
+                alert(`제품 "${lotData.product_name}"의 LOT ${lotNumber} 재고 확인 중 오류가 발생했습니다.`);
+                hasError = true;
+                break;
+            }
         }
         
         if (hasError) return;

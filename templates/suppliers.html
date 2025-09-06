@@ -20,32 +20,119 @@
     </div>
 </div>
 
-<!-- 거래처 목록 -->
+<!-- 거래처 통계 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">입고처</h5>
+                <h3 class="text-success" id="inSupplierCount">-</h3>
+                <p class="card-text">총 입고 거래처 수</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">출고처</h5>
+                <h3 class="text-warning" id="outSupplierCount">-</h3>
+                <p class="card-text">총 출고 거래처 수</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 거래처 목록 탭 -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">거래처 목록</h5>
+                <ul class="nav nav-tabs card-header-tabs" id="supplierTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab">
+                            <i class="fas fa-list me-2"></i>전체 거래처
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="in-tab" data-bs-toggle="tab" data-bs-target="#in" type="button" role="tab">
+                            <i class="fas fa-arrow-down me-2"></i>입고처
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="out-tab" data-bs-toggle="tab" data-bs-target="#out" type="button" role="tab">
+                            <i class="fas fa-arrow-up me-2"></i>출고처
+                        </button>
+                    </li>
+                </ul>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>거래처명</th>
-                                <th>유형</th>
-                                <th>담당자</th>
-                                <th>연락처</th>
-                                <th>이메일</th>
-                                <th>상태</th>
-                                <th>등록일</th>
-                                <th>작업</th>
-                            </tr>
-                        </thead>
-                        <tbody id="suppliersTable">
-                            <!-- 거래처 목록이 여기에 동적으로 로드됩니다 -->
-                        </tbody>
-                    </table>
+                <div class="tab-content" id="supplierTabContent">
+                    <!-- 전체 거래처 탭 -->
+                    <div class="tab-pane fade show active" id="all" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>거래처명</th>
+                                        <th>유형</th>
+                                        <th>담당자</th>
+                                        <th>연락처</th>
+                                        <th>이메일</th>
+                                        <th>상태</th>
+                                        <th>등록일</th>
+                                        <th>작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="allSuppliersTable">
+                                    <!-- 전체 거래처 목록이 여기에 동적으로 로드됩니다 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 입고처 탭 -->
+                    <div class="tab-pane fade" id="in" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>거래처명</th>
+                                        <th>담당자</th>
+                                        <th>연락처</th>
+                                        <th>이메일</th>
+                                        <th>상태</th>
+                                        <th>등록일</th>
+                                        <th>작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inSuppliersTable">
+                                    <!-- 입고처 목록이 여기에 동적으로 로드됩니다 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 출고처 탭 -->
+                    <div class="tab-pane fade" id="out" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>거래처명</th>
+                                        <th>담당자</th>
+                                        <th>연락처</th>
+                                        <th>이메일</th>
+                                        <th>상태</th>
+                                        <th>등록일</th>
+                                        <th>작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outSuppliersTable">
+                                    <!-- 출고처 목록이 여기에 동적으로 로드됩니다 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -73,12 +160,18 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="supplierType" class="form-label">거래처 유형 *</label>
+                                <label for="supplierType" class="form-label">거래처 분류 *</label>
                                 <select class="form-select" id="supplierType" name="supplier_type" required>
-                                    <option value="">유형을 선택하세요</option>
-                                    <option value="in">입고처</option>
-                                    <option value="out">출고처</option>
+                                    <option value="">분류를 선택하세요</option>
+                                    <option value="in">입고처 (재고를 공급받는 거래처)</option>
+                                    <option value="out">출고처 (재고를 공급하는 거래처)</option>
                                 </select>
+                                <div class="form-text">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        입고처는 재고를 구매하는 곳, 출고처는 재고를 판매하는 곳입니다.
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -132,6 +225,25 @@
     let suppliers = [];
     let editingSupplierId = null;
 
+    // 날짜 포맷팅 함수
+    function formatDate(dateString) {
+        if (!dateString || dateString === 'null' || dateString === 'undefined') {
+            return '-';
+        }
+        
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date:', dateString);
+                return '-';
+            }
+            return date.toLocaleDateString('ko-KR');
+        } catch (error) {
+            console.error('Date formatting error:', error, 'Input:', dateString);
+            return '-';
+        }
+    }
+
     // 페이지 로드 시 거래처 목록 로드
     document.addEventListener('DOMContentLoaded', function() {
         loadSuppliers();
@@ -145,7 +257,10 @@
             });
             
             if (response.ok) {
-                suppliers = await response.json();
+                const data = await response.json();
+                console.log('Suppliers API response:', data);
+                suppliers = data.suppliers || [];
+                console.log('Suppliers array:', suppliers);
                 renderSuppliersTable();
             } else {
                 alert('거래처 목록을 불러오는데 실패했습니다.');
@@ -158,18 +273,45 @@
 
     // 거래처 테이블 렌더링
     function renderSuppliersTable() {
-        const tbody = document.getElementById('suppliersTable');
+        // 통계 업데이트
+        const inSuppliers = suppliers.filter(s => s.supplier_type === 'in');
+        const outSuppliers = suppliers.filter(s => s.supplier_type === 'out');
+        
+        document.getElementById('inSupplierCount').textContent = inSuppliers.length;
+        document.getElementById('outSupplierCount').textContent = outSuppliers.length;
+
+        // 전체 거래처 테이블 렌더링
+        renderTable('allSuppliersTable', suppliers, true);
+        
+        // 입고처 테이블 렌더링
+        renderTable('inSuppliersTable', inSuppliers, false);
+        
+        // 출고처 테이블 렌더링
+        renderTable('outSuppliersTable', outSuppliers, false);
+    }
+
+    // 테이블 렌더링 헬퍼 함수
+    function renderTable(tableId, supplierList, showType = false) {
+        const tbody = document.getElementById(tableId);
         tbody.innerHTML = '';
 
-        suppliers.forEach(supplier => {
+        supplierList.forEach(supplier => {
             const row = document.createElement('tr');
+            let typeColumn = '';
+            
+            if (showType) {
+                typeColumn = `
+                    <td>
+                        <span class="badge ${supplier.supplier_type === 'in' ? 'bg-success' : 'bg-warning'}">
+                            ${supplier.supplier_type === 'in' ? '입고처' : '출고처'}
+                        </span>
+                    </td>
+                `;
+            }
+            
             row.innerHTML = `
                 <td>${supplier.name}</td>
-                <td>
-                    <span class="badge ${supplier.supplier_type === 'in' ? 'bg-success' : 'bg-warning'}">
-                        ${supplier.supplier_type === 'in' ? '입고처' : '출고처'}
-                    </span>
-                </td>
+                ${typeColumn}
                 <td>${supplier.contact_person || '-'}</td>
                 <td>${supplier.phone || '-'}</td>
                 <td>${supplier.email || '-'}</td>
@@ -178,7 +320,7 @@
                         ${supplier.is_active ? '활성' : '비활성'}
                     </span>
                 </td>
-                <td>${new Date(supplier.created_at).toLocaleDateString()}</td>
+                <td>${formatDate(supplier.created_at)}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary me-1" onclick="editSupplier(${supplier.id})">
                         <i class="fas fa-edit"></i>

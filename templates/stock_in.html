@@ -14,18 +14,23 @@
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">입고 등록</h5>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="mode" id="singleMode" value="single" checked>
+                    <label class="btn btn-outline-success btn-sm" for="singleMode">단일 제품</label>
+                    
+                    <input type="radio" class="btn-check" name="mode" id="bulkMode" value="bulk">
+                    <label class="btn btn-outline-success btn-sm" for="bulkMode">다중 제품</label>
+                </div>
             </div>
             <div class="card-body">
-                <form id="stockInForm">
+                <!-- 단일 제품 입고 폼 -->
+                <form id="singleStockInForm" class="stock-form">
                     <div class="mb-3">
                         <label for="productSelect" class="form-label">제품 선택</label>
                         <select class="form-select" id="productSelect" name="product_id" required>
                             <option value="">제품을 선택하세요</option>
-                            {% for product in products %}
-                            <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
-                            {% endfor %}
                         </select>
                     </div>
                     
@@ -58,6 +63,51 @@
                         </button>
                     </div>
                 </form>
+
+                <!-- 다중 제품 입고 폼 -->
+                <form id="bulkStockInForm" class="stock-form" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">제품 목록</label>
+                        <div class="table-responsive">
+                            <table class="table table-sm" id="bulkProductsTable">
+                                <thead>
+                                    <tr>
+                                        <th>제품명</th>
+                                        <th>현재 재고</th>
+                                        <th>입고 수량</th>
+                                        <th>LOT 번호</th>
+                                        <th>액션</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkProductsBody">
+                                    <!-- 동적으로 추가될 행들 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="addProductBtn">
+                            <i class="fas fa-plus me-1"></i>제품 추가
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulkSupplierId" class="form-label">입고처</label>
+                        <select class="form-select" id="bulkSupplierId" name="supplier_id">
+                            <option value="">입고처를 선택하세요</option>
+                        </select>
+                        <div class="form-text">입고처가 목록에 없으면 <a href="/suppliers" target="_blank">거래처 관리</a>에서 추가하세요.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulkNotes" class="form-label">비고</label>
+                        <textarea class="form-control" id="bulkNotes" name="notes" rows="3" placeholder="입고 관련 메모를 입력하세요"></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-arrow-down me-2"></i>다중 입고 처리
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -77,10 +127,93 @@
 
 {% block scripts %}
 <script>
-    // 페이지 로드 시 입고처 목록 로드
+    // 전역 변수
+    let allProducts = [];
+    let bulkProducts = [];
+    let productCounter = 0;
+    let categoryOrders = {};
+
+    // 페이지 로드 시 초기화
     document.addEventListener('DOMContentLoaded', function() {
         loadSuppliers();
+        loadProducts();
+        loadCategoryOrders();
+        setupModeToggle();
+        setupBulkForm();
     });
+
+    // 제품 목록 로드
+    async function loadProducts() {
+        try {
+            const response = await fetch('/api/products', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                allProducts = data.products || [];
+                populateProductSelect();
+            }
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
+    // 카테고리 순서 로드
+    async function loadCategoryOrders() {
+        try {
+            const response = await fetch('/api/categories/order', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                categoryOrders = data.category_orders || {};
+            }
+        } catch (error) {
+            console.error('Error loading category orders:', error);
+        }
+    }
+
+    // 제품 선택 드롭다운 채우기 (카테고리별 그룹화)
+    function populateProductSelect() {
+        const productSelect = document.getElementById('productSelect');
+        
+        // 카테고리별로 제품 그룹화
+        const productsByCategory = {};
+        allProducts.forEach(p => {
+            const category = p.category || '미분류';
+            if (!productsByCategory[category]) {
+                productsByCategory[category] = [];
+            }
+            productsByCategory[category].push(p);
+        });
+        
+        // 카테고리 순서대로 정렬
+        const sortedCategories = Object.keys(productsByCategory).sort((a, b) => {
+            const orderA = categoryOrders[a] || 999;
+            const orderB = categoryOrders[b] || 999;
+            return orderA - orderB;
+        });
+        
+        // 기존 옵션 제거 (첫 번째 옵션 제외)
+        productSelect.innerHTML = '<option value="">제품을 선택하세요</option>';
+        
+        // 카테고리별로 옵션 그룹 생성
+        sortedCategories.forEach(category => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category;
+            
+            productsByCategory[category].forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = `${p.name} (현재 재고: ${p.stock_quantity || 0})`;
+                optgroup.appendChild(option);
+            });
+            
+            productSelect.appendChild(optgroup);
+        });
+    }
 
     // 입고처 목록 로드
     async function loadSuppliers() {
@@ -90,21 +223,188 @@
             });
             
             if (response.ok) {
-                const suppliers = await response.json();
+                const data = await response.json();
+                const suppliers = data.suppliers || [];
                 const supplierSelect = document.getElementById('supplier_id');
+                const bulkSupplierSelect = document.getElementById('bulkSupplierId');
                 
                 // 입고처만 필터링
                 const inSuppliers = suppliers.filter(s => s.supplier_type === 'in' && s.is_active);
                 
                 inSuppliers.forEach(supplier => {
+                    // 단일 제품 폼용
                     const option = document.createElement('option');
                     option.value = supplier.id;
                     option.textContent = supplier.name;
                     supplierSelect.appendChild(option);
+                    
+                    // 다중 제품 폼용
+                    const bulkOption = document.createElement('option');
+                    bulkOption.value = supplier.id;
+                    bulkOption.textContent = supplier.name;
+                    bulkSupplierSelect.appendChild(bulkOption);
                 });
             }
         } catch (error) {
             console.error('Error loading suppliers:', error);
+        }
+    }
+
+    // 모드 토글 설정
+    function setupModeToggle() {
+        const singleMode = document.getElementById('singleMode');
+        const bulkMode = document.getElementById('bulkMode');
+        const singleForm = document.getElementById('singleStockInForm');
+        const bulkForm = document.getElementById('bulkStockInForm');
+
+        singleMode.addEventListener('change', function() {
+            if (this.checked) {
+                singleForm.style.display = 'block';
+                bulkForm.style.display = 'none';
+            }
+        });
+
+        bulkMode.addEventListener('change', function() {
+            if (this.checked) {
+                singleForm.style.display = 'none';
+                bulkForm.style.display = 'block';
+            }
+        });
+    }
+
+    // 다중 제품 폼 설정
+    function setupBulkForm() {
+        const addProductBtn = document.getElementById('addProductBtn');
+        addProductBtn.addEventListener('click', addBulkProductRow);
+    }
+
+    // 다중 제품 행 추가
+    function addBulkProductRow() {
+        const tbody = document.getElementById('bulkProductsBody');
+        const row = document.createElement('tr');
+        row.id = `product-row-${productCounter}`;
+        
+        // 카테고리별로 제품 그룹화
+        const productsByCategory = {};
+        allProducts.forEach(p => {
+            const category = p.category || '미분류';
+            if (!productsByCategory[category]) {
+                productsByCategory[category] = [];
+            }
+            productsByCategory[category].push(p);
+        });
+        
+        // 카테고리 순서대로 정렬
+        const sortedCategories = Object.keys(productsByCategory).sort((a, b) => {
+            const orderA = categoryOrders[a] || 999;
+            const orderB = categoryOrders[b] || 999;
+            return orderA - orderB;
+        });
+        
+        let optionsHtml = '<option value="">제품 선택</option>';
+        sortedCategories.forEach(category => {
+            optionsHtml += `<optgroup label="${category}">`;
+            productsByCategory[category].forEach(p => {
+                optionsHtml += `<option value="${p.id}" data-stock="${p.stock_quantity || 0}">${p.name}</option>`;
+            });
+            optionsHtml += '</optgroup>';
+        });
+        
+        row.innerHTML = `
+            <td>
+                <select class="form-select form-select-sm product-select" data-counter="${productCounter}" required>
+                    ${optionsHtml}
+                </select>
+            </td>
+            <td class="stock-display">-</td>
+            <td>
+                <input type="number" class="form-control form-control-sm quantity-input" 
+                       data-counter="${productCounter}" min="1" required>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm lot-input" 
+                       data-counter="${productCounter}" placeholder="LOT 번호 (선택사항)">
+            </td>
+            <td>
+                <button type="button" class="btn btn-outline-danger btn-sm" 
+                        onclick="removeBulkProductRow(${productCounter})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        
+        // 이벤트 리스너 추가
+        const productSelect = row.querySelector('.product-select');
+        const quantityInput = row.querySelector('.quantity-input');
+        
+        productSelect.addEventListener('change', function() {
+            updateStockDisplay(this);
+        });
+        
+        quantityInput.addEventListener('input', function() {
+            // 모든 행의 재고 표시를 업데이트 (동일한 제품의 경우)
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                if (pSelect && pSelect.value) {
+                    updateStockDisplay(pSelect);
+                }
+            });
+        });
+        
+        productCounter++;
+    }
+
+    // 다중 제품 행 제거
+    function removeBulkProductRow(counter) {
+        const row = document.getElementById(`product-row-${counter}`);
+        if (row) {
+            row.remove();
+            
+            // 모든 행의 재고 표시를 업데이트 (동일한 제품의 경우)
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                if (pSelect && pSelect.value) {
+                    updateStockDisplay(pSelect);
+                }
+            });
+        }
+    }
+
+    // 재고 표시 업데이트 (동일한 제품의 누적 입고량 반영)
+    function updateStockDisplay(productSelect) {
+        const row = productSelect.closest('tr');
+        const stockDisplay = row.querySelector('.stock-display');
+        const quantityInput = row.querySelector('.quantity-input');
+        
+        if (productSelect.value) {
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            const originalStock = parseInt(selectedOption.dataset.stock);
+            const currentQuantity = parseInt(quantityInput.value) || 0;
+            
+            // 동일한 제품의 모든 행에서 입고량 누적 계산
+            const productId = parseInt(productSelect.value);
+            const allRows = document.querySelectorAll('#bulkProductsBody tr');
+            let totalInQuantity = 0;
+            
+            allRows.forEach(r => {
+                const pSelect = r.querySelector('.product-select');
+                const qInput = r.querySelector('.quantity-input');
+                if (pSelect && qInput && parseInt(pSelect.value) === productId) {
+                    totalInQuantity += parseInt(qInput.value) || 0;
+                }
+            });
+            
+            const afterStock = originalStock + totalInQuantity;
+            
+            stockDisplay.textContent = `${originalStock} → ${afterStock}`;
+            stockDisplay.className = `stock-display text-success`;
+        } else {
+            stockDisplay.textContent = '-';
+            stockDisplay.className = 'stock-display';
         }
     }
 
@@ -126,8 +426,8 @@
         }
     });
     
-    // 입고 처리
-    document.getElementById('stockInForm').addEventListener('submit', async function(e) {
+    // 단일 입고 처리
+    document.getElementById('singleStockInForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const formData = new FormData(this);
@@ -140,7 +440,6 @@
         };
         
         try {
-            const token = localStorage.getItem('access_token');
             const response = await fetch('/stock/in', {
                 method: 'POST',
                 headers: {
@@ -154,7 +453,6 @@
                 alert('입고가 완료되었습니다.');
                 this.reset();
                 document.getElementById('productInfo').innerHTML = '<p class="text-muted">제품을 선택하면 정보가 표시됩니다.</p>';
-                // 페이지 새로고침하여 재고 수량 업데이트
                 setTimeout(() => location.reload(), 1000);
             } else {
                 const error = await response.json();
@@ -162,6 +460,78 @@
             }
         } catch (error) {
             alert('입고 처리 중 오류가 발생했습니다.');
+        }
+    });
+
+    // 다중 입고 처리
+    document.getElementById('bulkStockInForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const rows = document.querySelectorAll('#bulkProductsBody tr');
+        if (rows.length === 0) {
+            alert('입고할 제품을 추가해주세요.');
+            return;
+        }
+        
+        const items = [];
+        let hasError = false;
+        
+        for (const row of rows) {
+            const productSelect = row.querySelector('.product-select');
+            const quantityInput = row.querySelector('.quantity-input');
+            const lotInput = row.querySelector('.lot-input');
+            
+            if (!productSelect.value || !quantityInput.value) {
+                alert('모든 제품의 제품명과 수량을 입력해주세요.');
+                hasError = true;
+                break;
+            }
+            
+            const quantity = parseInt(quantityInput.value);
+            if (quantity <= 0) {
+                alert('입고 수량은 1 이상이어야 합니다.');
+                hasError = true;
+                break;
+            }
+            
+            items.push({
+                product_id: parseInt(productSelect.value),
+                quantity: quantity,
+                lot_number: lotInput.value || null
+            });
+        }
+        
+        if (hasError) return;
+        
+        const bulkData = {
+            items: items,
+            supplier_id: document.getElementById('bulkSupplierId').value ? parseInt(document.getElementById('bulkSupplierId').value) : null,
+            notes: document.getElementById('bulkNotes').value
+        };
+        
+        try {
+            const response = await fetch('/stock/in/bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(bulkData)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                alert(result.message);
+                this.reset();
+                document.getElementById('bulkProductsBody').innerHTML = '';
+                productCounter = 0;
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        } catch (error) {
+            alert('다중 입고 처리 중 오류가 발생했습니다.');
         }
     });
 </script>

@@ -237,28 +237,27 @@ function updateStockQuantity(productId, change) {
 
 // 사용자 정보 확인 및 관리자 메뉴 표시
 async function checkUserRole() {
-    console.log('DEBUG: checkUserRole 함수 실행');
+
     try {
         const response = await fetch('/api/user/me', {
             credentials: 'include'
         });
         
-        console.log('DEBUG: /api/user/me 응답 상태:', response.status);
         
         if (response.ok) {
             const user = await response.json();
-            console.log('DEBUG: 사용자 정보:', user);
+
             const adminMenuItem = document.getElementById('admin-menu-item');
             
             if (user.is_admin && adminMenuItem) {
                 adminMenuItem.style.display = 'block';
-                console.log('DEBUG: 관리자 메뉴 표시됨');
+
             }
         } else {
-            console.log('DEBUG: 사용자 정보 요청 실패, 상태:', response.status);
+
         }
     } catch (error) {
-        console.log('사용자 정보 확인 실패:', error);
+
     }
 }
 
@@ -331,7 +330,6 @@ setInterval(async function() {
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DEBUG: DOMContentLoaded 실행됨, 현재 경로:', window.location.pathname);
     
     // 쿠키 기반 인증이므로 localStorage 토큰 체크 제거
     // 서버에서 쿠키를 통해 인증을 처리함
@@ -340,7 +338,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!window.location.pathname.includes('/login') && 
         !window.location.pathname.includes('/register') && 
         window.location.pathname !== '/') {
-        console.log('   UG: 관리자 메뉴 체크 실행');
         checkUserRole();
     }
     

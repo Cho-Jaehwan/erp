@@ -63,70 +63,138 @@
 
 <!-- 요약 통계 -->
 <div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-primary text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
                     <div>
-                        <h4 class="card-title">총 제품</h4>
-                        <h2 id="totalProducts">{{ total_products }}</h2>
+                        <h5 class="card-title mb-2">총 제품</h5>
+                        <h2 class="mb-0" id="totalProducts">{{ total_products }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-boxes fa-2x"></i>
+                    <div class="ms-3">
+                        <i class="fas fa-boxes fa-2x opacity-75"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-success text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
                     <div>
-                        <h4 class="card-title">총 거래</h4>
-                        <h2 id="totalTransactions">{{ total_transactions }}</h2>
+                        <h5 class="card-title mb-2">총 거래</h5>
+                        <h2 class="mb-0" id="totalTransactions">{{ total_transactions }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-exchange-alt fa-2x"></i>
+                    <div class="ms-3">
+                        <i class="fas fa-exchange-alt fa-2x opacity-75"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
                     <div>
-                        <h4 class="card-title">카테고리</h4>
-                        <h2 id="totalCategories">{{ categories|length }}</h2>
+                        <h5 class="card-title mb-2">카테고리</h5>
+                        <h2 class="mb-0" id="totalCategories">{{ categories|length }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-tags fa-2x"></i>
+                    <div class="ms-3">
+                        <i class="fas fa-tags fa-2x opacity-75"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
                     <div>
-                        <h4 class="card-title">총 재고</h4>
-                        <h2 id="totalStock">{{ total_stock }}</h2>
+                        <h5 class="card-title mb-2">총 재고</h5>
+                        <h2 class="mb-0" id="totalStock">{{ total_stock }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-warehouse fa-2x"></i>
+                    <div class="ms-3">
+                        <i class="fas fa-warehouse fa-2x opacity-75"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- 주문 통계 -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-secondary text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div>
+                        <h5 class="card-title mb-2">총 주문</h5>
+                        <h2 class="mb-0" id="totalOrders">0</h2>
+                    </div>
+                    <div class="ms-3">
+                        <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-danger text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div>
+                        <h5 class="card-title mb-2">대기 주문</h5>
+                        <h2 class="mb-0" id="pendingOrders">0</h2>
+                    </div>
+                    <div class="ms-3">
+                        <i class="fas fa-clock fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-success text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div>
+                        <h5 class="card-title mb-2">완료 주문</h5>
+                        <h2 class="mb-0" id="completedOrders">0</h2>
+                    </div>
+                    <div class="ms-3">
+                        <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-primary text-white h-100 dashboard-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div>
+                        <h5 class="card-title mb-2">진행중 주문</h5>
+                        <h2 class="mb-0" id="inProgressOrders">0</h2>
+                    </div>
+                    <div class="ms-3">
+                        <i class="fas fa-spinner fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <!-- 응급 재고 알림 섹션 -->
 <div class="row mb-4" id="criticalStockAlerts" style="display: none;">
@@ -283,33 +351,10 @@
     </div>
 </div>
 
-<!-- 빠른 작업 및 재고 현황 -->
+
+<!-- 재고 현황 차트 -->
 <div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-tasks me-2"></i>빠른 작업
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="/inventory" class="btn btn-outline-primary">
-                        <i class="fas fa-boxes me-2"></i>품목 관리
-                    </a>
-                    <a href="/stock/in" class="btn btn-outline-success">
-                        <i class="fas fa-arrow-down me-2"></i>입고 처리
-                    </a>
-                    <a href="/stock/out" class="btn btn-outline-warning">
-                        <i class="fas fa-arrow-up me-2"></i>출고 처리
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 재고 현황 차트 -->
-    <div class="col-md-8">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -317,7 +362,9 @@
                 </h5>
             </div>
             <div class="card-body">
-                <canvas id="stockChart" width="400" height="200"></canvas>
+                <div class="row" id="stockChartsContainer">
+                    <!-- 카테고리별 차트들이 여기에 동적으로 생성됩니다 -->
+                </div>
             </div>
         </div>
     </div>
@@ -373,11 +420,136 @@
 .category-tree::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* 대시보드 카드 스타일 개선 */
+.dashboard-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.dashboard-card .card-body {
+    padding: 1.5rem;
+}
+
+.dashboard-card h5 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dashboard-card h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* 재고 현황 차트 스타일 */
+#stockChart {
+    max-height: 500px;
+}
+
+.card-body {
+    position: relative;
+}
+
+/* 반응형 카드 높이 조정 */
+@media (max-width: 768px) {
+    .dashboard-card h2 {
+        font-size: 2rem;
+    }
+    
+    .dashboard-card .card-body {
+        padding: 1rem;
+    }
+}
+
+/* 차트 범례 스타일 */
+.chartjs-legend {
+    margin-bottom: 20px;
+}
+
+/* 차트 툴팁 스타일 */
+.chartjs-tooltip {
+    background-color: rgba(0, 0, 0, 0.8) !important;
+    border-radius: 6px !important;
+    color: white !important;
+    font-size: 12px !important;
+}
+
+/* 카테고리별 차트 컨테이너 스타일 */
+#stockChartsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+}
+
+#stockChartsContainer .col-lg-6,
+#stockChartsContainer .col-xl-4 {
+    padding: 0 15px;
+}
+
+/* 카테고리 차트 카드 스타일 */
+#stockChartsContainer .card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e9ecef;
+    transition: box-shadow 0.2s ease;
+}
+
+#stockChartsContainer .card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+#stockChartsContainer .card-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+}
+
+#stockChartsContainer .card-header h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* 차트 캔버스 스타일 */
+#stockChartsContainer canvas {
+    max-height: 250px;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let stockChart = null;
     let suppliers = [];
+
+    // 주문 통계 로드
+    async function loadOrderStats() {
+        try {
+            const response = await fetch('/api/orders');
+            if (response.ok) {
+                const data = await response.json();
+                const orders = data.orders || [];
+                
+                // 주문 통계 계산
+                const totalOrders = orders.length;
+                const pendingOrders = orders.filter(o => o.status === 'pending').length;
+                const completedOrders = orders.filter(o => o.status === 'completed').length;
+                const inProgressOrders = orders.filter(o => o.status === 'in_progress').length;
+                
+                // 통계 업데이트
+                document.getElementById('totalOrders').textContent = totalOrders;
+                document.getElementById('pendingOrders').textContent = pendingOrders;
+                document.getElementById('completedOrders').textContent = completedOrders;
+                document.getElementById('inProgressOrders').textContent = inProgressOrders;
+            }
+        } catch (error) {
+            console.error('주문 통계 로드 실패:', error);
+        }
+    }
 
     // 페이지 로드 시 초기화
     document.addEventListener('DOMContentLoaded', function() {
@@ -385,6 +557,7 @@
         initializeDateFilters();
         createStockChart();
         loadSafetyStockAlerts();
+        loadOrderStats();
     });
 
     // 거래처 목록 로드
@@ -395,17 +568,29 @@
             });
             
             if (response.ok) {
-                suppliers = await response.json();
-                populateSupplierFilter();
+                const data = await response.json();
+                // 응답 데이터 검증
+                if (data && data.suppliers && Array.isArray(data.suppliers)) {
+                    suppliers = data.suppliers;
+                    populateSupplierFilter();
+                } else {
+                    console.error('잘못된 거래처 응답 형식:', data);
+                    suppliers = [];
+                }
             }
         } catch (error) {
             console.error('Error loading suppliers:', error);
+            suppliers = [];
         }
     }
 
     // 거래처 필터 드롭다운 채우기
     function populateSupplierFilter() {
         const supplierFilter = document.getElementById('supplierFilter');
+        if (!supplierFilter || !suppliers || !Array.isArray(suppliers)) {
+            return;
+        }
+        
         suppliers.forEach(supplier => {
             const option = document.createElement('option');
             option.value = supplier.id;
@@ -443,7 +628,8 @@
         if (alerts.critical_products && alerts.critical_products.length > 0) {
             let content = '<ul class="mb-0">';
             alerts.critical_products.forEach(product => {
-                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-danger">응급</span></li>`;
+                const stockQuantity = product.stock_quantity || 0;
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${stockQuantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-danger">응급</span></li>`;
             });
             content += '</ul>';
             criticalStockAlertContent.innerHTML = content;
@@ -456,7 +642,8 @@
         if (alerts.warning_products && alerts.warning_products.length > 0) {
             let content = '<ul class="mb-0">';
             alerts.warning_products.forEach(product => {
-                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-warning">주의</span></li>`;
+                const stockQuantity = product.stock_quantity || 0;
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${stockQuantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-warning">주의</span></li>`;
             });
             content += '</ul>';
             warningStockAlertContent.innerHTML = content;
@@ -469,7 +656,8 @@
         if (alerts.good_products && alerts.good_products.length > 0) {
             let content = '<ul class="mb-0">';
             alerts.good_products.forEach(product => {
-                content += `<li><strong>${product.name}</strong>: 현재 재고 ${product.stock_quantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-success">양호</span></li>`;
+                const stockQuantity = product.stock_quantity || 0;
+                content += `<li><strong>${product.name}</strong>: 현재 재고 ${stockQuantity}개 (안전 재고: ${product.safety_stock}개) - <span class="text-success">양호</span></li>`;
             });
             content += '</ul>';
             goodStockAlertContent.innerHTML = content;
@@ -488,71 +676,221 @@
         document.getElementById('dateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
     }
 
-    // 재고 현황 차트 생성
-    function createStockChart() {
-        const ctx = document.getElementById('stockChart').getContext('2d');
+    // 재고 현황 차트 생성 (카테고리별 분리)
+    async function createStockChart() {
+        try {
+            // 품목페이지와 동일한 정렬 순서로 제품 데이터 가져오기
+            const response = await fetch('/api/products?sort_by=custom&sort_order=asc', {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error('제품 데이터를 불러올 수 없습니다.');
+            }
+            
+            const data = await response.json();
+            const products = data.products || [];
+            
+            // 카테고리별로 제품 그룹화
+            const categoryProducts = {};
+            for (const product of products) {
+                const category = product.category || '미분류';
+                if (!categoryProducts[category]) {
+                    categoryProducts[category] = [];
+                }
+                categoryProducts[category].push(product);
+            }
+            
+            // 카테고리 순서 조회
+            const categoryOrderResponse = await fetch('/api/categories/order', {
+                credentials: 'include'
+            });
+            
+            let categoryOrderDict = {};
+            if (categoryOrderResponse.ok) {
+                const categoryOrderData = await categoryOrderResponse.json();
+                categoryOrderDict = categoryOrderData.category_orders || {};
+            }
+            
+            // 카테고리를 순서대로 정렬
+            const sortedCategories = Object.keys(categoryProducts).sort((a, b) => {
+                const orderA = categoryOrderDict[a] || 999;
+                const orderB = categoryOrderDict[b] || 999;
+                return orderA - orderB;
+            });
+            
+            // 기존 차트들 제거
+            if (window.stockCharts) {
+                window.stockCharts.forEach(chart => {
+                    if (chart) chart.destroy();
+                });
+            }
+            window.stockCharts = [];
+            
+            // 컨테이너 초기화
+            const container = document.getElementById('stockChartsContainer');
+            container.innerHTML = '';
+            
+            // 각 카테고리별로 독립적인 차트 생성
+            sortedCategories.forEach((category, categoryIndex) => {
+                const products = categoryProducts[category];
+                createCategoryChart(category, products, categoryIndex);
+            });
+            
+        } catch (error) {
+            console.error('Error creating stock charts:', error);
+            // 오류 발생 시 기본 차트 생성
+            createDefaultChart();
+        }
+    }
+    
+    // 개별 카테고리 차트 생성
+    function createCategoryChart(category, products, categoryIndex) {
+        const container = document.getElementById('stockChartsContainer');
         
-        // 실제 제품 데이터를 사용하여 차트 생성
-        const products = [
-            {% for product in products %}
-            {
-                name: '{{ product.name }}',
-                stock: {{ product.stock_quantity }}
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
+        // 카테고리별 차트 컨테이너 생성
+        const chartContainer = document.createElement('div');
+        chartContainer.className = 'col-lg-6 col-xl-4 mb-4';
+        chartContainer.innerHTML = `
+            <div class="card h-100">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-tag me-2"></i>${category}
+                        <span class="badge bg-primary ms-2">${products.length}개</span>
+                    </h6>
+                </div>
+                <div class="card-body" style="height: 300px;">
+                    <canvas id="chart_${categoryIndex}"></canvas>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(chartContainer);
+        
+        // 차트 생성
+        const ctx = document.getElementById(`chart_${categoryIndex}`).getContext('2d');
+        
+        // 색상 팔레트
+        const colors = [
+            { bg: 'rgba(54, 162, 235, 0.2)', border: 'rgba(54, 162, 235, 1)' },
+            { bg: 'rgba(255, 99, 132, 0.2)', border: 'rgba(255, 99, 132, 1)' },
+            { bg: 'rgba(255, 205, 86, 0.2)', border: 'rgba(255, 205, 86, 1)' },
+            { bg: 'rgba(75, 192, 192, 0.2)', border: 'rgba(75, 192, 192, 1)' },
+            { bg: 'rgba(153, 102, 255, 0.2)', border: 'rgba(153, 102, 255, 1)' },
+            { bg: 'rgba(255, 159, 64, 0.2)', border: 'rgba(255, 159, 64, 1)' },
+            { bg: 'rgba(199, 199, 199, 0.2)', border: 'rgba(199, 199, 199, 1)' },
+            { bg: 'rgba(83, 102, 255, 0.2)', border: 'rgba(83, 102, 255, 1)' }
         ];
         
-        const stockData = {
+        const colorIndex = categoryIndex % colors.length;
+        
+        // 차트 데이터
+        const chartData = {
             labels: products.map(p => p.name),
             datasets: [{
                 label: '재고 수량',
-                data: products.map(p => p.stock),
-                backgroundColor: [
-                    'rgba(54, 162, 235, 0.2)',
-                    'rgba(255, 99, 132, 0.2)',
-                    'rgba(255, 205, 86, 0.2)',
-                    'rgba(75, 192, 192, 0.2)',
-                    'rgba(153, 102, 255, 0.2)',
-                    'rgba(255, 159, 64, 0.2)',
-                    'rgba(199, 199, 199, 0.2)',
-                    'rgba(83, 102, 255, 0.2)'
-                ],
-                borderColor: [
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 99, 132, 1)',
-                    'rgba(255, 205, 86, 1)',
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(153, 102, 255, 1)',
-                    'rgba(255, 159, 64, 1)',
-                    'rgba(199, 199, 199, 1)',
-                    'rgba(83, 102, 255, 1)'
-                ],
+                data: products.map(p => p.stock_quantity || 0),
+                backgroundColor: colors[colorIndex].bg,
+                borderColor: colors[colorIndex].border,
                 borderWidth: 1
             }]
         };
         
-        if (stockChart) {
-            stockChart.destroy();
-        }
-        
-        stockChart = new Chart(ctx, {
+        // 차트 생성 및 저장
+        const chart = new Chart(ctx, {
             type: 'bar',
-            data: stockData,
+            data: chartData,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '재고 수량 (개)',
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: false
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            font: {
+                                size: 10
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
                     }
                 },
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: 'white',
+                        bodyColor: 'white',
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        borderWidth: 1,
+                        cornerRadius: 6,
+                        callbacks: {
+                            title: function(context) {
+                                return `제품: ${context[0].label}`;
+                            },
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return `재고: ${value.toLocaleString()}개`;
+                            },
+                            afterLabel: function(context) {
+                                const value = context.parsed.y;
+                                
+                                // 재고 상태 표시
+                                if (value === 0) {
+                                    return '상태: 재고 없음';
+                                } else if (value <= 5) {
+                                    return '상태: 재고 부족';
+                                } else if (value <= 20) {
+                                    return '상태: 보통';
+                                } else {
+                                    return '상태: 충분';
+                                }
+                            }
+                        }
                     }
                 }
             }
         });
+        
+        // 차트를 전역 배열에 저장
+        if (!window.stockCharts) {
+            window.stockCharts = [];
+        }
+        window.stockCharts.push(chart);
+    }
+    
+    // 기본 차트 생성 (오류 시 사용)
+    function createDefaultChart() {
+        const container = document.getElementById('stockChartsContainer');
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    차트를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.
+                </div>
+            </div>
+        `;
     }
 
     // 필터 적용

@@ -10,6 +10,9 @@
                 <i class="fas fa-user-shield me-2"></i>관리자 페이지
             </h1>
             <div>
+                <button type="button" class="btn btn-warning me-2" onclick="syncStockQuantities()">
+                    <i class="fas fa-sync-alt me-1"></i>재고 동기화
+                </button>
                 <a href="/audit-logs" class="btn btn-outline-info">
                     <i class="fas fa-clipboard-list me-1"></i>감사 로그
                 </a>
@@ -68,6 +71,28 @@
         </div>
     </div>
 </div>
+
+<!-- 재고 동기화 결과 모달 -->
+<div class="modal fade" id="syncResultModal" tabindex="-1" aria-labelledby="syncResultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="syncResultModalLabel">
+                    <i class="fas fa-sync-alt me-2"></i>재고 동기화 결과
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="syncResultContent">
+                    <!-- 동기화 결과가 여기에 표시됩니다 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -116,6 +141,93 @@
         } catch (error) {
             alert('거부 처리 중 오류가 발생했습니다.');
         }
+    }
+
+    // 재고 동기화 함수
+    async function syncStockQuantities() {
+        if (!confirm('모든 제품의 재고 수량을 거래 내역 기반으로 다시 계산하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.')) {
+            return;
+        }
+
+        try {
+            // 로딩 표시
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>동기화 중...';
+            button.disabled = true;
+
+            const response = await fetch('/api/admin/sync-stock-quantities', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                showSyncResult(result);
+            } else {
+                const error = await response.json();
+                alert('재고 동기화 실패: ' + error.detail);
+            }
+        } catch (error) {
+            alert('재고 동기화 중 오류가 발생했습니다.');
+        } finally {
+            // 버튼 상태 복원
+            const button = event.target;
+            button.innerHTML = '<i class="fas fa-sync-alt me-1"></i>재고 동기화';
+            button.disabled = false;
+        }
+    }
+
+    // 동기화 결과 표시
+    function showSyncResult(result) {
+        const content = document.getElementById('syncResultContent');
+        
+        let html = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>${result.message}
+            </div>
+            
+            <h6>동기화 상세 결과:</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>제품명</th>
+                            <th>기존 재고</th>
+                            <th>새 재고</th>
+                            <th>변화량</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        result.sync_results.forEach(item => {
+            const differenceClass = item.difference > 0 ? 'text-success' : 
+                                  item.difference < 0 ? 'text-danger' : 'text-muted';
+            const differenceText = item.difference > 0 ? `+${item.difference}` : 
+                                 item.difference < 0 ? `${item.difference}` : '0';
+            
+            html += `
+                <tr>
+                    <td>${item.product_name}</td>
+                    <td>${item.old_stock}</td>
+                    <td>${item.new_stock}</td>
+                    <td class="${differenceClass}">${differenceText}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        content.innerHTML = html;
+        
+        // 모달 표시
+        const modal = new bootstrap.Modal(document.getElementById('syncResultModal'));
+        modal.show();
     }
 </script>
 {% endblock %}

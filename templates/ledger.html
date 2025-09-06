@@ -52,6 +52,16 @@
                         <label for="productSearch" class="form-label">제품명 검색</label>
                         <input type="text" class="form-control" id="productSearch" name="product_search" placeholder="제품명을 입력하세요">
                     </div>
+                    <div class="col-md-3">
+                        <label for="categoryFilter" class="form-label">카테고리</label>
+                        <select class="form-select" id="categoryFilter" name="category">
+                            <option value="">전체 카테고리</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="lotNumberSearch" class="form-label">라트 번호 검색</label>
+                        <input type="text" class="form-control" id="lotNumberSearch" name="lot_number" placeholder="라트 번호를 입력하세요">
+                    </div>
                     <div class="col-12">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-search me-2"></i>조회
@@ -192,6 +202,7 @@
         await loadCurrentUser();
         loadSuppliers();
         loadProducts();
+        loadCategories();
         setupEventListeners();
         loadTransactions();
     });
@@ -205,7 +216,6 @@
             
             if (response.ok) {
                 currentUser = await response.json();
-                console.log('현재 사용자:', currentUser);
             }
         } catch (error) {
             console.error('Error loading current user:', error);
@@ -229,19 +239,16 @@
         const fromDate = formatDate(oneMonthAgo);
         const toDate = formatDate(today);
         
-        console.log('현재 날짜:', today);
-        console.log('설정할 날짜 범위:', fromDate, '~', toDate);
         
         document.getElementById('dateFrom').value = fromDate;
         document.getElementById('dateTo').value = toDate;
         
         // 설정된 값 확인
-        console.log('실제 설정된 값:', document.getElementById('dateFrom').value, document.getElementById('dateTo').value);
+
         
         // 임시로 더 넓은 범위 설정 (2024년부터 현재까지)
         document.getElementById('dateFrom').value = '2024-01-01';
         document.getElementById('dateTo').value = toDate;
-        console.log('임시로 설정된 값:', document.getElementById('dateFrom').value, document.getElementById('dateTo').value);
     }
 
     // 거래처 목록 로드
@@ -252,7 +259,8 @@
             });
             
             if (response.ok) {
-                allSuppliers = await response.json();
+                const data = await response.json();
+                allSuppliers = data.suppliers || [];
                 const supplierSelect = document.getElementById('supplierFilter');
                 
                 allSuppliers.forEach(supplier => {
@@ -275,7 +283,8 @@
             });
             
             if (response.ok) {
-                allProducts = await response.json();
+                const data = await response.json();
+                allProducts = data.products || [];
                 const productSelect = document.getElementById('productFilter');
                 
                 allProducts.forEach(product => {
@@ -287,6 +296,34 @@
             }
         } catch (error) {
             console.error('Error loading products:', error);
+        }
+    }
+
+    // 카테고리 목록 로드
+    async function loadCategories() {
+        try {
+            const response = await fetch('/api/categories', {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const categories = await response.json();
+                const categorySelect = document.getElementById('categoryFilter');
+                
+                // 기존 옵션 유지 (전체 카테고리)
+                const allOption = categorySelect.querySelector('option[value=""]');
+                categorySelect.innerHTML = '';
+                categorySelect.appendChild(allOption);
+                
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category;
+                    categorySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading categories:', error);
         }
     }
 
@@ -306,6 +343,8 @@
             document.getElementById('transactionType').value = '';
             document.getElementById('productFilter').value = '';
             document.getElementById('productSearch').value = '';
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('lotNumberSearch').value = '';
             currentPage = 1;
             loadTransactions();
         });
@@ -380,6 +419,8 @@
             transaction_type: formData.get('transaction_type'),
             product_id: formData.get('product_id'),
             product_search: formData.get('product_search'),
+            category: formData.get('category'),
+            lot_number: formData.get('lot_number'),
             page: currentPage
         };
 
@@ -395,9 +436,6 @@
 
             if (response.ok) {
                 const data = await response.json();
-                console.log('API 응답 데이터:', data);
-                console.log('거래 내역 개수:', data.recent_transactions ? data.recent_transactions.length : 0);
-                console.log('거래 내역 상세:', data.recent_transactions);
                 displayTransactions(data);
                 updateStatistics(data);
                 updatePagination(data);
@@ -416,16 +454,13 @@
     function displayTransactions(data) {
         hideLoading();
         
-        console.log('거래 내역 표시 함수 호출:', data);
-        console.log('현재 사용자 정보 (표시 시점):', currentUser);
+
         
         if (!data.recent_transactions || data.recent_transactions.length === 0) {
-            console.log('거래 내역이 없음');
             showNoData();
             return;
         }
 
-        console.log('거래 내역 개수:', data.recent_transactions.length);
         
         const tableView = document.getElementById('tableView');
         const cardView = document.getElementById('cardView');
@@ -439,15 +474,13 @@
 
     // 테이블 뷰 표시
     function displayTableView(transactions) {
-        console.log('테이블 뷰 표시 시작, 거래 내역 개수:', transactions.length);
-        console.log('현재 사용자 정보:', currentUser);
+
         
         const tbody = document.getElementById('transactionsTableBody');
         tbody.innerHTML = '';
 
         transactions.forEach((transaction, index) => {
-            console.log(`거래 내역 ${index + 1}:`, transaction);
-            console.log(`작업자 정보 - user:`, transaction.user, 'user_id:', transaction.user_id);
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${formatDateTime(transaction.created_at)}</td>
@@ -473,20 +506,16 @@
             `;
             tbody.appendChild(row);
         });
-        console.log('테이블 뷰 표시 완료');
     }
 
     // 카드 뷰 표시
     function displayCardView(transactions) {
-        console.log('카드 뷰 표시 시작, 거래 내역 개수:', transactions.length);
-        console.log('현재 사용자 정보:', currentUser);
         
         const cardBody = document.getElementById('transactionsCardBody');
         cardBody.innerHTML = '';
 
         transactions.forEach(transaction => {
-            console.log(`카드 뷰 거래 내역:`, transaction);
-            console.log(`카드 뷰 작업자 정보 - user:`, transaction.user, 'user_id:', transaction.user_id);
+
             const card = document.createElement('div');
             card.className = 'col-md-6 col-lg-4 mb-3';
             card.innerHTML = `
