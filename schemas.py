@@ -78,12 +78,16 @@ class SupplierUpdate(BaseModel):
 
 class Supplier(SupplierBase):
     id: int
+    sort_order: int = 0
     is_active: bool
     created_at: datetime
     updated_at: datetime
     
     class Config:
         from_attributes = True
+
+class SupplierSortOrderUpdate(BaseModel):
+    sort_orders: dict  # {"supplier_id": sort_order}
 
 # 재고 거래 관련 스키마
 class StockTransactionBase(BaseModel):

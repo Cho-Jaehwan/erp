@@ -31,23 +31,6 @@
                         <label for="productSelect" class="form-label">제품 선택</label>
                         <select class="form-select" id="productSelect" name="product_id" required>
                             <option value="">제품을 선택하세요</option>
-                            {% set current_category = "" %}
-                            {% for product in products %}
-                                {% if product.stock_quantity > 0 %}
-                                    {% set product_category = product.category or '미분류' %}
-                                    {% if product_category != current_category %}
-                                        {% if current_category != "" %}
-                                            </optgroup>
-                                        {% endif %}
-                                        {% set current_category = product_category %}
-                                        <optgroup label="{{ current_category }}">
-                                    {% endif %}
-                                    <option value="{{ product.id }}">{{ product.name }} (현재 재고: {{ product.stock_quantity }})</option>
-                                {% endif %}
-                            {% endfor %}
-                            {% if current_category != "" %}
-                                </optgroup>
-                            {% endif %}
                         </select>
                     </div>
                     
@@ -213,10 +196,54 @@
             if (response.ok) {
                 const data = await response.json();
                 allProducts = data.products || [];
+                populateProductSelect();
             }
         } catch (error) {
             console.error('Error loading products:', error);
         }
+    }
+
+    // 제품 선택 드롭다운 채우기 (카테고리별 그룹화, 재고가 있는 제품만)
+    function populateProductSelect() {
+        const productSelect = document.getElementById('productSelect');
+        
+        // 재고가 있는 제품만 필터링
+        const availableProducts = allProducts.filter(p => (p.stock_quantity || 0) > 0);
+        
+        // 카테고리별로 제품 그룹화
+        const productsByCategory = {};
+        availableProducts.forEach(p => {
+            const category = p.category || '미분류';
+            if (!productsByCategory[category]) {
+                productsByCategory[category] = [];
+            }
+            productsByCategory[category].push(p);
+        });
+        
+        // 카테고리 순서대로 정렬
+        const sortedCategories = Object.keys(productsByCategory).sort((a, b) => {
+            const orderA = categoryOrders[a] || 999;
+            const orderB = categoryOrders[b] || 999;
+            return orderA - orderB;
+        });
+        
+        // 기존 옵션 제거 (첫 번째 옵션 제외)
+        productSelect.innerHTML = '<option value="">제품을 선택하세요</option>';
+        
+        // 카테고리별로 옵션 그룹 생성
+        sortedCategories.forEach(category => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category;
+            
+            productsByCategory[category].forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = `${p.name} (현재 재고: ${p.stock_quantity || 0})`;
+                optgroup.appendChild(option);
+            });
+            
+            productSelect.appendChild(optgroup);
+        });
     }
 
     // 카테고리 순서 로드

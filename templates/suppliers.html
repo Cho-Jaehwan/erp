@@ -17,6 +17,15 @@
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">
             <i class="fas fa-plus me-2"></i>새 거래처 추가
         </button>
+        <button type="button" class="btn btn-outline-secondary ms-2" id="toggleSortMode">
+            <i class="fas fa-sort me-2"></i>정렬 모드
+        </button>
+        <button type="button" class="btn btn-success ms-2" id="saveSortOrder" style="display: none;">
+            <i class="fas fa-save me-2"></i>정렬 순서 저장
+        </button>
+        <button type="button" class="btn btn-secondary ms-2" id="cancelSortMode" style="display: none;">
+            <i class="fas fa-times me-2"></i>정렬 취소
+        </button>
     </div>
 </div>
 
@@ -73,6 +82,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
+                                        <th class="sort-handle-column" style="display: none;">순서</th>
                                         <th>거래처명</th>
                                         <th>유형</th>
                                         <th>담당자</th>
@@ -96,6 +106,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
+                                        <th class="sort-handle-column" style="display: none;">순서</th>
                                         <th>거래처명</th>
                                         <th>담당자</th>
                                         <th>연락처</th>
@@ -118,6 +129,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
+                                        <th class="sort-handle-column" style="display: none;">순서</th>
                                         <th>거래처명</th>
                                         <th>담당자</th>
                                         <th>연락처</th>
@@ -221,9 +233,12 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
     let suppliers = [];
     let editingSupplierId = null;
+    let isSortMode = false;
+    let originalSortOrder = {};
 
     // 날짜 포맷팅 함수
     function formatDate(dateString) {
@@ -297,7 +312,19 @@
 
         supplierList.forEach(supplier => {
             const row = document.createElement('tr');
+            row.setAttribute('data-supplier-id', supplier.id);
+            row.setAttribute('data-supplier-type', supplier.supplier_type);
+            
             let typeColumn = '';
+            let sortHandleColumn = '';
+            
+            if (isSortMode) {
+                sortHandleColumn = `
+                    <td class="sort-handle-column">
+                        <i class="fas fa-grip-vertical text-muted" style="cursor: move;"></i>
+                    </td>
+                `;
+            }
             
             if (showType) {
                 typeColumn = `
@@ -310,6 +337,7 @@
             }
             
             row.innerHTML = `
+                ${sortHandleColumn}
                 <td>${supplier.name}</td>
                 ${typeColumn}
                 <td>${supplier.contact_person || '-'}</td>
@@ -322,16 +350,21 @@
                 </td>
                 <td>${formatDate(supplier.created_at)}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editSupplier(${supplier.id})">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editSupplier(${supplier.id})" ${isSortMode ? 'disabled' : ''}>
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSupplier(${supplier.id})">
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSupplier(${supplier.id})" ${isSortMode ? 'disabled' : ''}>
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             `;
             tbody.appendChild(row);
         });
+        
+        // 정렬 모드일 때 Sortable 초기화
+        if (isSortMode) {
+            initializeSortable(tableId);
+        }
     }
 
     // 거래처 추가/수정 모달 열기
@@ -448,5 +481,236 @@
         document.getElementById('supplierForm').reset();
         editingSupplierId = null;
     });
+
+    // 정렬 모드 토글
+    document.getElementById('toggleSortMode').addEventListener('click', function() {
+        toggleSortMode();
+    });
+
+    // 정렬 순서 저장
+    document.getElementById('saveSortOrder').addEventListener('click', function() {
+        saveSortOrder();
+    });
+
+    // 정렬 취소
+    document.getElementById('cancelSortMode').addEventListener('click', function() {
+        cancelSortMode();
+    });
+
+    // 정렬 모드 토글 함수
+    function toggleSortMode() {
+        isSortMode = !isSortMode;
+        
+        if (isSortMode) {
+            // 정렬 모드 진입
+            document.getElementById('toggleSortMode').style.display = 'none';
+            document.getElementById('saveSortOrder').style.display = 'inline-block';
+            document.getElementById('cancelSortMode').style.display = 'inline-block';
+            
+            // 원본 정렬 순서 저장
+            originalSortOrder = {};
+            suppliers.forEach(supplier => {
+                originalSortOrder[supplier.id] = supplier.sort_order || 0;
+            });
+            
+            // 정렬 핸들 컬럼 표시
+            document.querySelectorAll('.sort-handle-column').forEach(col => {
+                col.style.display = 'table-cell';
+            });
+            
+            // 테이블 다시 렌더링
+            renderSuppliersTable();
+            
+            // 탭 전환 이벤트 리스너 추가
+            document.querySelectorAll('#supplierTabs button[data-bs-toggle="tab"]').forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function() {
+                    if (isSortMode) {
+                        renderSuppliersTable();
+                    }
+                });
+            });
+        } else {
+            // 정렬 모드 종료
+            exitSortMode();
+        }
+    }
+
+    // 정렬 모드 종료
+    function exitSortMode() {
+        isSortMode = false;
+        document.getElementById('toggleSortMode').style.display = 'inline-block';
+        document.getElementById('saveSortOrder').style.display = 'none';
+        document.getElementById('cancelSortMode').style.display = 'none';
+        
+        // 정렬 핸들 컬럼 숨기기
+        document.querySelectorAll('.sort-handle-column').forEach(col => {
+            col.style.display = 'none';
+        });
+        
+        // 탭 이벤트 리스너 제거
+        document.querySelectorAll('#supplierTabs button[data-bs-toggle="tab"]').forEach(tab => {
+            tab.removeEventListener('shown.bs.tab', function() {
+                if (isSortMode) {
+                    renderSuppliersTable();
+                }
+            });
+        });
+        
+        // 테이블 다시 렌더링
+        renderSuppliersTable();
+    }
+
+    // 정렬 취소
+    function cancelSortMode() {
+        // 원본 정렬 순서로 복원
+        suppliers.forEach(supplier => {
+            supplier.sort_order = originalSortOrder[supplier.id] || 0;
+        });
+        
+        exitSortMode();
+    }
+
+    // Sortable 초기화
+    function initializeSortable(tableId) {
+        const tbody = document.getElementById(tableId);
+        if (tbody) {
+            new Sortable(tbody, {
+                handle: '.sort-handle-column',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                onEnd: function(evt) {
+                    // 정렬 순서 업데이트
+                    updateSortOrder(tableId);
+                }
+            });
+        }
+    }
+
+    // 정렬 순서 업데이트
+    function updateSortOrder(tableId) {
+        const tbody = document.getElementById(tableId);
+        const rows = tbody.querySelectorAll('tr[data-supplier-id]');
+        
+        rows.forEach((row, index) => {
+            const supplierId = parseInt(row.getAttribute('data-supplier-id'));
+            const supplierType = row.getAttribute('data-supplier-type');
+            const supplier = suppliers.find(s => s.id === supplierId);
+            if (supplier) {
+                // 타입별로 독립적인 정렬 순서 설정
+                if (supplierType === 'in') {
+                    // 입고처의 경우 입고처 내에서의 순서
+                    const inSuppliers = suppliers.filter(s => s.supplier_type === 'in');
+                    const inIndex = Array.from(rows).indexOf(row);
+                    supplier.sort_order = inIndex + 1;
+                } else if (supplierType === 'out') {
+                    // 출고처의 경우 출고처 내에서의 순서
+                    const outSuppliers = suppliers.filter(s => s.supplier_type === 'out');
+                    const outIndex = Array.from(rows).indexOf(row);
+                    supplier.sort_order = outIndex + 1;
+                }
+            }
+        });
+        
+        console.log('Updated suppliers sort order:', suppliers.map(s => ({id: s.id, name: s.name, type: s.supplier_type, sort_order: s.sort_order})));
+    }
+
+    // 정렬 순서 저장
+    async function saveSortOrder() {
+        try {
+            // 각 타입별로 정렬 순서 수집
+            const sortOrders = {};
+            
+            // 현재 표시된 테이블에서 실제 순서를 가져오기
+            const activeTab = document.querySelector('.nav-link.active');
+            const activeTabId = activeTab ? activeTab.getAttribute('data-bs-target').replace('#', '') : 'all';
+            
+            if (activeTabId === 'all') {
+                // 전체 탭의 경우 타입별로 순서 수집
+                const inSuppliers = suppliers.filter(s => s.supplier_type === 'in').sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+                const outSuppliers = suppliers.filter(s => s.supplier_type === 'out').sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+                
+                inSuppliers.forEach((supplier, index) => {
+                    sortOrders[supplier.id] = index + 1;
+                });
+                
+                outSuppliers.forEach((supplier, index) => {
+                    sortOrders[supplier.id] = index + 1;
+                });
+            } else if (activeTabId === 'in') {
+                // 입고처 탭의 경우
+                const inTable = document.getElementById('inSuppliersTable');
+                const rows = inTable.querySelectorAll('tr[data-supplier-id]');
+                rows.forEach((row, index) => {
+                    const supplierId = parseInt(row.getAttribute('data-supplier-id'));
+                    sortOrders[supplierId] = index + 1;
+                });
+            } else if (activeTabId === 'out') {
+                // 출고처 탭의 경우
+                const outTable = document.getElementById('outSuppliersTable');
+                const rows = outTable.querySelectorAll('tr[data-supplier-id]');
+                rows.forEach((row, index) => {
+                    const supplierId = parseInt(row.getAttribute('data-supplier-id'));
+                    sortOrders[supplierId] = index + 1;
+                });
+            }
+            
+            // 새로운 스키마에 맞게 데이터 구성
+            const requestData = {
+                sort_orders: sortOrders
+            };
+            
+            console.log('Sending sort order data:', requestData);
+            
+            const response = await fetch('/api/suppliers/update-sort-order', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(requestData)
+            });
+
+            console.log('Response status:', response.status);
+
+            if (response.ok) {
+                alert('거래처 정렬 순서가 저장되었습니다.');
+                exitSortMode();
+                loadSuppliers(); // 목록 새로고침
+            } else {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                try {
+                    const error = JSON.parse(errorText);
+                    alert(error.detail || '정렬 순서 저장에 실패했습니다.');
+                } catch (parseError) {
+                    alert('정렬 순서 저장에 실패했습니다: ' + errorText);
+                }
+            }
+        } catch (error) {
+            console.error('Error saving sort order:', error);
+            alert('정렬 순서 저장에 실패했습니다.');
+        }
+    }
 </script>
+
+<style>
+.sortable-ghost {
+    opacity: 0.4;
+}
+
+.sortable-chosen {
+    background-color: #f8f9fa;
+}
+
+.sortable-drag {
+    background-color: #e3f2fd;
+}
+
+.sort-handle-column {
+    width: 50px;
+    text-align: center;
+}
+</style>
 {% endblock %}

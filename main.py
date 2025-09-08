@@ -51,6 +51,21 @@ def check_sort_order_column_exists():
     except Exception:
         return False
 
+def check_supplier_sort_order_column_exists():
+    """suppliers 테이블에 sort_order 컬럼 존재 여부 확인"""
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        result = db.execute(text("PRAGMA table_info(suppliers)"))
+        columns = result.fetchall()
+        db.close()
+        
+        # 컬럼명 확인
+        column_names = [column[1] for column in columns]
+        return 'sort_order' in column_names
+    except Exception:
+        return False
+
 def check_category_orders_table_exists():
     """category_orders 테이블 존재 여부 확인"""
     try:
@@ -146,6 +161,56 @@ def migrate_add_sort_order():
         db.rollback()
         return False
         
+    finally:
+        db.close()
+
+def migrate_add_supplier_sort_order():
+    """Supplier 테이블에 sort_order 컬럼을 추가하고 기존 데이터에 순서를 설정합니다."""
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        
+        print("거래처 sort_order 컬럼을 추가하는 중...")
+        db.execute(text("ALTER TABLE suppliers ADD COLUMN sort_order INTEGER DEFAULT 0"))
+        
+        # 기존 거래처들에 타입별 순서 설정
+        print("기존 거래처들에 순서를 설정하는 중...")
+        
+        # 타입별로 거래처 조회
+        result = db.execute(text("""
+            SELECT id, supplier_type, name 
+            FROM suppliers 
+            ORDER BY supplier_type, name
+        """))
+        suppliers = result.fetchall()
+        
+        # 타입별 순서 카운터
+        type_counters = {}
+        
+        for supplier_id, supplier_type, name in suppliers:
+            if supplier_type not in type_counters:
+                type_counters[supplier_type] = 0
+            
+            type_counters[supplier_type] += 1
+            sort_order = type_counters[supplier_type]
+            
+            # sort_order 업데이트
+            db.execute(text("""
+                UPDATE suppliers 
+                SET sort_order = :sort_order 
+                WHERE id = :supplier_id
+            """), {"sort_order": sort_order, "supplier_id": supplier_id})
+            
+        
+        # 변경사항 저장
+        db.commit()
+        
+        return True
+        
+    except Exception as e:
+        print(f"마이그레이션 중 오류 발생: {e}")
+        db.rollback()
+        return False
     finally:
         db.close()
 
@@ -262,7 +327,7 @@ def initialize_database():
     if not check_sort_order_column_exists():
         print("sort_order 컬럼이 없습니다. 마이그레이션을 시작합니다...")
         if migrate_add_sort_order():
-            print("✅ sort_order 컬럼 마이그레이션이 완료되었습니다.")
+            print("sort_order 컬럼 마이그레이션이 완료되었습니다.")
         else:
             print("❌ sort_order 컬럼 마이그레이션에 실패했습니다.")
     else:
@@ -272,7 +337,7 @@ def initialize_database():
     print("거래처 유형 마이그레이션을 확인합니다...")
     try:
         if migrate_supplier_type():
-            print("✅ 거래처 유형 마이그레이션이 완료되었습니다.")
+            print("거래처 유형 마이그레이션이 완료되었습니다.")
         else:
             print("❌ 거래처 유형 마이그레이션에 실패했습니다.")
     except Exception as e:
@@ -282,7 +347,7 @@ def initialize_database():
     print("카테고리 순서를 초기화합니다...")
     try:
         if initialize_category_orders():
-            print("✅ 카테고리 순서 초기화가 완료되었습니다.")
+            print("카테고리 순서 초기화가 완료되었습니다.")
         else:
             print("❌ 카테고리 순서 초기화에 실패했습니다.")
     except Exception as e:
@@ -1603,7 +1668,7 @@ async def get_suppliers(access_token: str = Cookie(None), db: Session = Depends(
     if not user:
         raise HTTPException(status_code=401, detail="인증이 필요합니다")
     
-    suppliers = db.query(Supplier).order_by(Supplier.supplier_type.asc(), Supplier.name.asc()).all()
+    suppliers = db.query(Supplier).order_by(Supplier.supplier_type.asc(), Supplier.sort_order.asc(), Supplier.name.asc()).all()
     return {
         "suppliers": [
             {
@@ -1614,6 +1679,7 @@ async def get_suppliers(access_token: str = Cookie(None), db: Session = Depends(
                 "email": supplier.email,
                 "address": supplier.address,
                 "supplier_type": supplier.supplier_type,
+                "sort_order": supplier.sort_order,
                 "is_active": supplier.is_active,
                 "created_at": supplier.created_at.isoformat() if supplier.created_at else None
             }
@@ -1646,6 +1712,33 @@ async def create_supplier(supplier: SupplierCreate, access_token: str = Cookie(N
     db.refresh(db_supplier)
     
     return {"message": "거래처가 추가되었습니다", "supplier": db_supplier}
+
+# 거래처 정렬 순서 업데이트 API (더 구체적인 경로를 먼저 정의)
+@app.put("/api/suppliers/update-sort-order")
+async def update_supplier_sort_order(request: Request, access_token: str = Cookie(None), db: Session = Depends(get_db)):
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    try:
+        # Request body에서 JSON 데이터 가져오기
+        body = await request.json()
+        
+        # body는 {"sort_orders": {"supplier_id": sort_order}} 형태
+        sort_orders = body.get("sort_orders", {})
+        
+        for supplier_id, sort_order in sort_orders.items():
+            db_supplier = db.query(Supplier).filter(Supplier.id == int(supplier_id)).first()
+            if db_supplier:
+                db_supplier.sort_order = int(sort_order)
+        
+        db.commit()
+        return {"message": "거래처 정렬 순서가 업데이트되었습니다"}
+    
+    except Exception as e:
+        print(f"Error in sort order update: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"정렬 순서 업데이트 중 오류가 발생했습니다: {str(e)}")
 
 # 거래처 수정 API
 @app.put("/api/suppliers/{supplier_id}")
@@ -3115,5 +3208,12 @@ if __name__ == "__main__":
         migrate_create_payment_tables()
     else:
         print("결제 관련 테이블이 이미 존재합니다.")
+    
+    # 거래처 정렬 순서 컬럼이 없으면 추가
+    if not check_supplier_sort_order_column_exists():
+        print("거래처 정렬 순서 컬럼이 없습니다. 추가합니다.")
+        migrate_add_supplier_sort_order()
+    else:
+        print("거래처 정렬 순서 컬럼이 이미 존재합니다.")
     
     uvicorn.run(app, host="0.0.0.0", port=8100)

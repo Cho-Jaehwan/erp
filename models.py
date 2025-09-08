@@ -49,6 +49,7 @@ class Supplier(Base):
     email = Column(String(100))
     address = Column(Text)
     supplier_type = Column(String(20), nullable=False)  # "in" (입고처) 또는 "out" (출고처)
+    sort_order = Column(Integer, default=0)  # 거래처 정렬 순서
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=9))))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone(timedelta(hours=9))), onupdate=lambda: datetime.now(timezone(timedelta(hours=9))))
