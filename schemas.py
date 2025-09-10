@@ -97,6 +97,7 @@ class StockTransactionBase(BaseModel):
     supplier_id: Optional[int] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 class StockTransactionCreate(StockTransactionBase):
     pass
@@ -110,6 +111,10 @@ class StockTransaction(StockTransactionBase):
     class Config:
         from_attributes = True
 
+class StockTransactionQuantityUpdate(BaseModel):
+    new_quantity: int
+    reason: str
+
 # 다중 제품 입고/출고 처리를 위한 스키마
 class BulkStockItem(BaseModel):
     product_id: int
@@ -120,11 +125,13 @@ class BulkStockInCreate(BaseModel):
     items: list[BulkStockItem]
     supplier_id: Optional[int] = None
     notes: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 class BulkStockOutCreate(BaseModel):
     items: list[BulkStockItem]
     supplier_id: Optional[int] = None
     notes: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 # 결제 관련 스키마
 class PaymentTransactionBase(BaseModel):

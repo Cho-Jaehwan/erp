@@ -121,12 +121,17 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">거래 내역</h5>
-                <div class="btn-group btn-group-sm" role="group">
-                    <input type="radio" class="btn-check" name="viewMode" id="tableView" value="table" checked>
-                    <label class="btn btn-outline-primary" for="tableView">테이블</label>
-                    
-                    <input type="radio" class="btn-check" name="viewMode" id="cardView" value="card">
-                    <label class="btn btn-outline-primary" for="cardView">카드</label>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="resetColumnWidths" title="컬럼 크기 초기화">
+                        <i class="fas fa-arrows-alt-h me-1"></i>컬럼 초기화
+                    </button>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="viewMode" id="tableView" value="table" checked>
+                        <label class="btn btn-outline-primary" for="tableView">테이블</label>
+                        
+                        <input type="radio" class="btn-check" name="viewMode" id="cardView" value="card">
+                        <label class="btn btn-outline-primary" for="cardView">카드</label>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
@@ -136,15 +141,42 @@
                         <table class="table table-hover" id="transactionsTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th>거래일시</th>
-                                    <th>제품명</th>
-                                    <th>거래 유형</th>
-                                    <th>수량</th>
-                                    <th>LOT 번호</th>
-                                    <th>거래처</th>
-                                    <th>작업자</th>
-                                    <th>비고</th>
-                                    <th>작업</th>
+                                    <th class="resizable-column" data-column="date" style="width: 150px;">
+                                        거래일시
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="product" style="width: 200px;">
+                                        제품명
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="type" style="width: 100px;">
+                                        거래 유형
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="quantity" style="width: 80px;">
+                                        수량
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="lot" style="width: 120px;">
+                                        LOT 번호
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="supplier" style="width: 150px;">
+                                        거래처
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="user" style="width: 100px;">
+                                        작업자
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="notes" style="width: 200px;">
+                                        비고
+                                        <div class="resize-handle"></div>
+                                    </th>
+                                    <th class="resizable-column" data-column="actions" style="width: 80px;">
+                                        작업
+                                        <div class="resize-handle"></div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTableBody">
@@ -184,9 +216,102 @@
         </div>
     </div>
 </div>
+
+<!-- 수량 수정 모달 -->
+<div class="modal fade" id="editQuantityModal" tabindex="-1" aria-labelledby="editQuantityModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editQuantityModalLabel">수량 수정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editQuantityForm">
+                    <input type="hidden" id="editTransactionId" name="transaction_id">
+                    <div class="mb-3">
+                        <label for="editProductName" class="form-label">제품명</label>
+                        <input type="text" class="form-control" id="editProductName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editTransactionType" class="form-label">거래 유형</label>
+                        <input type="text" class="form-control" id="editTransactionType" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCurrentQuantity" class="form-label">현재 수량</label>
+                        <input type="text" class="form-control" id="editCurrentQuantity" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editNewQuantity" class="form-label">새 수량</label>
+                        <input type="number" class="form-control" id="editNewQuantity" name="new_quantity" min="1" required>
+                        <div class="form-text">수량을 수정하면 재고가 자동으로 조정됩니다.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editReason" class="form-label">수정 사유</label>
+                        <textarea class="form-control" id="editReason" name="reason" rows="3" placeholder="수량 수정 사유를 입력하세요" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuantityEdit()">수정</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+/* 컬럼 리사이즈 스타일 */
+.resizable-column {
+    position: relative;
+    user-select: none;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+.resize-handle:hover {
+    background: #007bff;
+}
+
+.resize-handle:active {
+    background: #0056b3;
+}
+
+/* 리사이즈 중일 때 테이블 스타일 */
+.table-resizing {
+    user-select: none;
+}
+
+.table-resizing * {
+    pointer-events: none;
+}
+
+/* 리사이즈 중인 컬럼 하이라이트 */
+.resizing-column {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+/* 리사이즈 가이드라인 */
+.resize-guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #007bff;
+    z-index: 1000;
+    pointer-events: none;
+}
+</style>
 <script>
     // 전역 변수
     let currentPage = 1;
@@ -195,6 +320,13 @@
     let allSuppliers = [];
     let allProducts = [];
     let currentUser = null;
+    
+    // 컬럼 리사이즈 관련 변수
+    let isResizing = false;
+    let resizingColumn = null;
+    let startX = 0;
+    let startWidth = 0;
+    let resizeGuide = null;
 
     // 페이지 로드 시 초기화
     document.addEventListener('DOMContentLoaded', async function() {
@@ -204,6 +336,8 @@
         loadProducts();
         loadCategories();
         setupEventListeners();
+        setupColumnResize();
+        loadColumnWidths();
         loadTransactions();
     });
 
@@ -370,6 +504,9 @@
         // 엑셀 다운로드
         document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
+        // 컬럼 크기 초기화
+        document.getElementById('resetColumnWidths').addEventListener('click', resetColumnWidths);
+
         // 제품명 검색 기능
         document.getElementById('productSearch').addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase();
@@ -399,6 +536,161 @@
                 });
             }
         });
+    }
+
+    // 웹스토리지 관련 함수들
+    function saveColumnWidths() {
+        const columnWidths = {};
+        const columns = document.querySelectorAll('.resizable-column');
+        
+        columns.forEach(column => {
+            const columnName = column.dataset.column;
+            const width = column.style.width;
+            if (width) {
+                columnWidths[columnName] = width;
+            }
+        });
+        
+        localStorage.setItem('ledger_column_widths', JSON.stringify(columnWidths));
+    }
+
+    function loadColumnWidths() {
+        try {
+            const savedWidths = localStorage.getItem('ledger_column_widths');
+            if (savedWidths) {
+                const columnWidths = JSON.parse(savedWidths);
+                const columns = document.querySelectorAll('.resizable-column');
+                
+                columns.forEach(column => {
+                    const columnName = column.dataset.column;
+                    if (columnWidths[columnName]) {
+                        column.style.width = columnWidths[columnName];
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('컬럼 너비 로드 중 오류:', error);
+        }
+    }
+
+    // 컬럼 리사이즈 기능 설정
+    function setupColumnResize() {
+        const table = document.getElementById('transactionsTable');
+        const columns = table.querySelectorAll('.resizable-column');
+        
+        columns.forEach(column => {
+            const handle = column.querySelector('.resize-handle');
+            
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                startResize(column, e);
+            });
+        });
+        
+        // 전역 마우스 이벤트
+        document.addEventListener('mousemove', handleResize);
+        document.addEventListener('mouseup', stopResize);
+    }
+
+    function startResize(column, e) {
+        isResizing = true;
+        resizingColumn = column;
+        startX = e.clientX;
+        startWidth = parseInt(window.getComputedStyle(column).width, 10);
+        
+        // 테이블에 리사이징 클래스 추가
+        document.getElementById('transactionsTable').classList.add('table-resizing');
+        column.classList.add('resizing-column');
+        
+        // 리사이즈 가이드라인 생성
+        createResizeGuide(e.clientX);
+        
+        // 마우스 커서 변경
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }
+
+    function handleResize(e) {
+        if (!isResizing || !resizingColumn) return;
+        
+        const deltaX = e.clientX - startX;
+        const newWidth = Math.max(50, startWidth + deltaX); // 최소 50px
+        
+        resizingColumn.style.width = newWidth + 'px';
+        
+        // 가이드라인 위치 업데이트
+        if (resizeGuide) {
+            resizeGuide.style.left = e.clientX + 'px';
+        }
+    }
+
+    function stopResize() {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        
+        // 클래스 제거
+        document.getElementById('transactionsTable').classList.remove('table-resizing');
+        if (resizingColumn) {
+            resizingColumn.classList.remove('resizing-column');
+        }
+        
+        // 가이드라인 제거
+        removeResizeGuide();
+        
+        // 마우스 커서 복원
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // 웹스토리지에 저장
+        saveColumnWidths();
+        
+        resizingColumn = null;
+    }
+
+    function createResizeGuide(x) {
+        resizeGuide = document.createElement('div');
+        resizeGuide.className = 'resize-guide';
+        resizeGuide.style.left = x + 'px';
+        document.body.appendChild(resizeGuide);
+    }
+
+    function removeResizeGuide() {
+        if (resizeGuide) {
+            resizeGuide.remove();
+            resizeGuide = null;
+        }
+    }
+
+    // 컬럼 크기 초기화
+    function resetColumnWidths() {
+        if (confirm('컬럼 크기를 기본값으로 초기화하시겠습니까?')) {
+            // 기본 컬럼 크기 설정
+            const defaultWidths = {
+                'date': '150px',
+                'product': '200px',
+                'type': '100px',
+                'quantity': '80px',
+                'lot': '120px',
+                'supplier': '150px',
+                'user': '100px',
+                'notes': '200px',
+                'actions': '80px'
+            };
+            
+            const columns = document.querySelectorAll('.resizable-column');
+            columns.forEach(column => {
+                const columnName = column.dataset.column;
+                if (defaultWidths[columnName]) {
+                    column.style.width = defaultWidths[columnName];
+                }
+            });
+            
+            // 웹스토리지에서 제거
+            localStorage.removeItem('ledger_column_widths');
+            
+            alert('컬럼 크기가 기본값으로 초기화되었습니다.');
+        }
     }
 
     // 거래 내역 로드
@@ -497,9 +789,14 @@
                 <td>${transaction.notes || '-'}</td>
                 <td>
                     ${currentUser && currentUser.is_admin ? 
-                        `<button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
-                            <i class="fas fa-trash"></i>
-                        </button>` : 
+                        `<div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary" onclick="editTransactionQuantity(${transaction.id}, ${transaction.quantity})" title="수량 수정">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>` : 
                         '<span class="text-muted">-</span>'
                     }
                 </td>
@@ -527,9 +824,14 @@
                         <div class="d-flex align-items-center gap-2">
                             <small class="text-muted">${formatDateTime(transaction.created_at)}</small>
                             ${currentUser && currentUser.is_admin ? 
-                                `<button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
-                                    <i class="fas fa-trash"></i>
-                                </button>` : 
+                                `<div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-primary" onclick="editTransactionQuantity(${transaction.id}, ${transaction.quantity})" title="수량 수정">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="deleteTransaction(${transaction.id})" title="거래 내역 삭제">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>` : 
                                 ''
                             }
                         </div>
@@ -651,6 +953,96 @@
 
     function formatNumber(num) {
         return new Intl.NumberFormat('ko-KR').format(num);
+    }
+
+    // 수량 수정 모달 열기
+    async function editTransactionQuantity(transactionId, currentQuantity) {
+        // 관리자 권한 확인
+        if (!currentUser || !currentUser.is_admin) {
+            alert('관리자 권한이 필요합니다.');
+            return;
+        }
+
+        try {
+            // 거래 내역 상세 정보 가져오기
+            const response = await fetch(`/api/transactions/${transactionId}`, {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const transaction = await response.json();
+                
+                // 모달에 데이터 설정
+                document.getElementById('editTransactionId').value = transactionId;
+                document.getElementById('editProductName').value = transaction.product ? transaction.product.name : 'N/A';
+                document.getElementById('editTransactionType').value = transaction.transaction_type === 'in' ? '입고' : '출고';
+                document.getElementById('editCurrentQuantity').value = formatNumber(currentQuantity);
+                document.getElementById('editNewQuantity').value = currentQuantity;
+                document.getElementById('editReason').value = '';
+                
+                // 모달 표시
+                const modal = new bootstrap.Modal(document.getElementById('editQuantityModal'));
+                modal.show();
+            } else {
+                alert('거래 내역 정보를 가져오는데 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('Error loading transaction details:', error);
+            alert('거래 내역 정보를 가져오는 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 수량 수정 저장
+    async function saveQuantityEdit() {
+        const transactionId = document.getElementById('editTransactionId').value;
+        const newQuantity = parseInt(document.getElementById('editNewQuantity').value);
+        const reason = document.getElementById('editReason').value;
+
+        if (!newQuantity || newQuantity <= 0) {
+            alert('올바른 수량을 입력해주세요.');
+            return;
+        }
+
+        if (!reason.trim()) {
+            alert('수정 사유를 입력해주세요.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/transactions/${transactionId}/quantity`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    new_quantity: newQuantity,
+                    reason: reason
+                })
+            });
+
+            if (response.ok) {
+                alert('수량이 성공적으로 수정되었습니다.');
+                // 모달 닫기
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editQuantityModal'));
+                modal.hide();
+                // 현재 페이지의 거래 내역 다시 로드
+                loadTransactions();
+            } else {
+                let errorMessage = '알 수 없는 오류가 발생했습니다.';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorMessage;
+                } catch (e) {
+                    const errorText = await response.text();
+                    errorMessage = errorText || errorMessage;
+                }
+                alert(`수정 실패: ${errorMessage}`);
+            }
+        } catch (error) {
+            console.error('Error updating transaction quantity:', error);
+            alert('수량 수정 중 오류가 발생했습니다.');
+        }
     }
 
     // 거래 내역 삭제

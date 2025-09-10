@@ -53,6 +53,12 @@
                     </div>
                     
                     <div class="mb-3">
+                        <label for="transaction_date" class="form-label">입고일자</label>
+                        <input type="datetime-local" class="form-control" id="transaction_date" name="transaction_date">
+                        <div class="form-text">입고일자를 설정하지 않으면 현재 시간이 사용됩니다.</div>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="notes" class="form-label">비고</label>
                         <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="입고 관련 메모를 입력하세요"></textarea>
                     </div>
@@ -95,6 +101,12 @@
                             <option value="">입고처를 선택하세요</option>
                         </select>
                         <div class="form-text">입고처가 목록에 없으면 <a href="/suppliers" target="_blank">거래처 관리</a>에서 추가하세요.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bulkTransactionDate" class="form-label">입고일자</label>
+                        <input type="datetime-local" class="form-control" id="bulkTransactionDate" name="transaction_date">
+                        <div class="form-text">입고일자를 설정하지 않으면 현재 시간이 사용됩니다.</div>
                     </div>
                     
                     <div class="mb-3">
@@ -436,7 +448,8 @@
             quantity: parseInt(formData.get('quantity')),
             lot_number: formData.get('lot_number'),
             supplier_id: formData.get('supplier_id') ? parseInt(formData.get('supplier_id')) : null,
-            notes: formData.get('notes')
+            notes: formData.get('notes'),
+            transaction_date: formData.get('transaction_date') || null
         };
         
         try {
@@ -506,7 +519,8 @@
         const bulkData = {
             items: items,
             supplier_id: document.getElementById('bulkSupplierId').value ? parseInt(document.getElementById('bulkSupplierId').value) : null,
-            notes: document.getElementById('bulkNotes').value
+            notes: document.getElementById('bulkNotes').value,
+            transaction_date: document.getElementById('bulkTransactionDate').value || null
         };
         
         try {

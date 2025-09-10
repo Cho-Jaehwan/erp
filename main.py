@@ -15,7 +15,7 @@ import pytz
 from database import get_db, engine
 from models import User, Product, StockTransaction, Supplier, AuditLog, CategoryOrder, PaymentTransaction, PaymentSchedule, PrepaymentBalance, Order, OrderItem, AdvancePayment, SupplySchedule, DocumentWork, Base
 from auth import get_current_user, get_current_admin, create_access_token, create_refresh_token, verify_password, get_password_hash
-from schemas import UserCreate, UserLogin, ProductCreate, ProductUpdate, StockTransactionCreate, SupplierCreate, SupplierUpdate, BulkStockInCreate, BulkStockOutCreate, PaymentTransactionCreate, PaymentScheduleCreate, PrepaymentBalanceCreate, OrderCreate, OrderUpdate, AdvancePaymentCreate, AdvancePaymentUpdate, SupplyScheduleCreate, SupplyScheduleUpdate, DocumentWorkCreate, DocumentWorkUpdate
+from schemas import UserCreate, UserLogin, ProductCreate, ProductUpdate, StockTransactionCreate, StockTransactionQuantityUpdate, SupplierCreate, SupplierUpdate, BulkStockInCreate, BulkStockOutCreate, PaymentTransactionCreate, PaymentScheduleCreate, PrepaymentBalanceCreate, OrderCreate, OrderUpdate, AdvancePaymentCreate, AdvancePaymentUpdate, SupplyScheduleCreate, SupplyScheduleUpdate, DocumentWorkCreate, DocumentWorkUpdate
 import subprocess
 import sys
 
@@ -24,6 +24,50 @@ def check_database_exists():
     from database import DB_DIR
     db_path = os.path.join(DB_DIR, "erp_system.db")
     return os.path.exists(db_path)
+
+def ensure_all_tables_exist():
+    """모든 필요한 테이블이 존재하는지 확인하고 없으면 생성"""
+    try:
+        from database import SessionLocal, engine
+        db = SessionLocal()
+        
+        # 모든 테이블 존재 여부 확인
+        required_tables = [
+            'users', 'products', 'suppliers', 'stock_transactions', 
+            'audit_logs', 'orders', 'order_items', 'advance_payments',
+            'supply_schedules', 'document_works', 'payment_transactions',
+            'payment_schedules', 'prepayment_balances', 'category_orders'
+        ]
+        
+        missing_tables = []
+        for table in required_tables:
+            try:
+                db.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+            except Exception:
+                missing_tables.append(table)
+        
+        db.close()
+        
+        if missing_tables:
+            print(f"누락된 테이블들: {missing_tables}")
+            print("모든 테이블을 생성합니다...")
+            Base.metadata.create_all(bind=engine)
+            print("모든 테이블 생성 완료!")
+            return True
+        else:
+            print("모든 테이블이 존재합니다.")
+            return True
+            
+    except Exception as e:
+        print(f"테이블 확인 중 오류: {e}")
+        # 오류가 발생해도 테이블 생성 시도
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("오류 발생으로 인한 테이블 생성 완료!")
+            return True
+        except Exception as create_error:
+            print(f"테이블 생성 실패: {create_error}")
+            return False
 
 def check_audit_logs_table_exists():
     """audit_logs 테이블 존재 여부 확인"""
@@ -1261,6 +1305,7 @@ async def process_stock_in(transaction: StockTransactionCreate, access_token: st
     
     # 입고 거래 기록 (서울 시간대 사용)
     current_time = get_seoul_time()
+    transaction_time = transaction.transaction_date if transaction.transaction_date else current_time
     stock_transaction = StockTransaction(
         product_id=transaction.product_id,
         user_id=user.id,
@@ -1270,7 +1315,7 @@ async def process_stock_in(transaction: StockTransactionCreate, access_token: st
         lot_number=transaction.lot_number,
         location=transaction.location,
         notes=transaction.notes,
-        created_at=current_time
+        created_at=transaction_time
     )
     db.add(stock_transaction)
     db.flush()  # ID를 얻기 위해 flush
@@ -1328,6 +1373,7 @@ async def process_bulk_stock_in(bulk_data: BulkStockInCreate, access_token: str 
     # 모든 검증이 통과하면 입고 처리
     transactions = []
     current_time = get_seoul_time()
+    transaction_time = bulk_data.transaction_date if bulk_data.transaction_date else current_time
     
     # 제품별 총 입고량을 먼저 계산하여 재고 업데이트
     for product_id, total_in_quantity in product_in_totals.items():
@@ -1346,7 +1392,7 @@ async def process_bulk_stock_in(bulk_data: BulkStockInCreate, access_token: str 
             lot_number=item.lot_number,
             location=None,
             notes=bulk_data.notes,
-            created_at=current_time
+            created_at=transaction_time
         )
         transactions.append(stock_transaction)
         db.add(stock_transaction)
@@ -1436,6 +1482,7 @@ async def process_stock_out(transaction: StockTransactionCreate, access_token: s
     
     # 출고 거래 기록 (서울 시간대 사용)
     current_time = get_seoul_time()
+    transaction_time = transaction.transaction_date if transaction.transaction_date else current_time
     stock_transaction = StockTransaction(
         product_id=transaction.product_id,
         user_id=user.id,
@@ -1445,7 +1492,7 @@ async def process_stock_out(transaction: StockTransactionCreate, access_token: s
         lot_number=transaction.lot_number,
         location=transaction.location,
         notes=transaction.notes,
-        created_at=current_time
+        created_at=transaction_time
     )
     db.add(stock_transaction)
     db.flush()  # ID를 얻기 위해 flush
@@ -1544,6 +1591,7 @@ async def process_bulk_stock_out(bulk_data: BulkStockOutCreate, access_token: st
     # 모든 검증이 통과하면 출고 처리
     transactions = []
     current_time = get_seoul_time()
+    transaction_time = bulk_data.transaction_date if bulk_data.transaction_date else current_time
     
     # 제품별 총 출고량을 먼저 계산하여 재고 업데이트
     for product_id, total_out_quantity in product_out_totals.items():
@@ -1562,7 +1610,7 @@ async def process_bulk_stock_out(bulk_data: BulkStockOutCreate, access_token: st
             lot_number=item.lot_number,
             location=None,
             notes=bulk_data.notes,
-            created_at=current_time
+            created_at=transaction_time
         )
         transactions.append(stock_transaction)
         db.add(stock_transaction)
@@ -1668,24 +1716,37 @@ async def get_suppliers(access_token: str = Cookie(None), db: Session = Depends(
     if not user:
         raise HTTPException(status_code=401, detail="인증이 필요합니다")
     
-    suppliers = db.query(Supplier).order_by(Supplier.supplier_type.asc(), Supplier.sort_order.asc(), Supplier.name.asc()).all()
-    return {
-        "suppliers": [
-            {
-                "id": supplier.id,
-                "name": supplier.name,
-                "contact_person": supplier.contact_person,
-                "phone": supplier.phone,
-                "email": supplier.email,
-                "address": supplier.address,
-                "supplier_type": supplier.supplier_type,
-                "sort_order": supplier.sort_order,
-                "is_active": supplier.is_active,
-                "created_at": supplier.created_at.isoformat() if supplier.created_at else None
-            }
-            for supplier in suppliers
-        ]
-    }
+    try:
+        # 테이블 존재 여부 확인
+        db.execute(text("SELECT 1 FROM suppliers LIMIT 1"))
+        suppliers = db.query(Supplier).order_by(Supplier.supplier_type.asc(), Supplier.sort_order.asc(), Supplier.name.asc()).all()
+        return {
+            "suppliers": [
+                {
+                    "id": supplier.id,
+                    "name": supplier.name,
+                    "contact_person": supplier.contact_person,
+                    "phone": supplier.phone,
+                    "email": supplier.email,
+                    "address": supplier.address,
+                    "supplier_type": supplier.supplier_type,
+                    "sort_order": supplier.sort_order,
+                    "is_active": supplier.is_active,
+                    "created_at": supplier.created_at.isoformat() if supplier.created_at else None
+                }
+                for supplier in suppliers
+            ]
+        }
+    except Exception as e:
+        print(f"DEBUG: suppliers 테이블 조회 중 오류: {e}")
+        # 테이블이 없으면 생성 시도
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("suppliers 테이블을 생성했습니다.")
+            return {"suppliers": []}
+        except Exception as create_error:
+            print(f"DEBUG: 테이블 생성 중 오류: {create_error}")
+            raise HTTPException(status_code=500, detail=f"데이터베이스 오류: {str(e)}")
 
 # 거래처 추가 API
 @app.post("/api/suppliers")
@@ -2117,6 +2178,121 @@ async def delete_transaction(
     print(f"DEBUG: 거래 내역 삭제 완료 - ID: {transaction_id}, 관리자: {user.username}")
     
     return {"message": "거래 내역이 삭제되었습니다"}
+
+# 거래 내역 상세 조회 API
+@app.get("/api/transactions/{transaction_id}")
+async def get_transaction_detail(
+    transaction_id: int,
+    access_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # 거래 내역 조회
+    transaction = db.query(StockTransaction).options(
+        joinedload(StockTransaction.product),
+        joinedload(StockTransaction.supplier),
+        joinedload(StockTransaction.user)
+    ).filter(StockTransaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="거래 내역을 찾을 수 없습니다")
+    
+    return transaction
+
+# 거래 내역 수량 수정 API
+@app.put("/api/transactions/{transaction_id}/quantity")
+async def update_transaction_quantity(
+    transaction_id: int,
+    update_data: StockTransactionQuantityUpdate,
+    request: Request,
+    access_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user_from_cookie(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # 관리자 권한 확인
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    
+    # 거래 내역 조회
+    transaction = db.query(StockTransaction).options(
+        joinedload(StockTransaction.product)
+    ).filter(StockTransaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="거래 내역을 찾을 수 없습니다")
+    
+    # 제품 조회
+    product = transaction.product
+    if not product:
+        raise HTTPException(status_code=404, detail="제품 정보를 찾을 수 없습니다")
+    
+    # 기존 수량과 새 수량
+    old_quantity = transaction.quantity
+    new_quantity = update_data.new_quantity
+    
+    if new_quantity <= 0:
+        raise HTTPException(status_code=400, detail="수량은 1 이상이어야 합니다")
+    
+    # 수량 차이 계산
+    quantity_diff = new_quantity - old_quantity
+    
+    # 재고 조정 (입고는 +, 출고는 -)
+    if transaction.transaction_type == "in":
+        # 입고 수량 수정: 차이만큼 재고 조정
+        product.stock_quantity += quantity_diff
+    else:
+        # 출고 수량 수정: 차이만큼 재고 조정 (차이가 음수면 재고 증가, 양수면 재고 감소)
+        product.stock_quantity -= quantity_diff
+        
+        # 출고 수량이 증가하는 경우 재고 부족 확인
+        if quantity_diff > 0 and product.stock_quantity < 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"재고가 부족합니다. (현재 재고: {product.stock_quantity + quantity_diff}개, 추가 출고 요청: {quantity_diff}개)"
+            )
+    
+    # 거래 내역 수량 업데이트
+    transaction.quantity = new_quantity
+    
+    # 감사 로그 기록
+    try:
+        import json
+        transaction_details = {
+            "product_id": transaction.product_id,
+            "product_name": product.name,
+            "transaction_type": transaction.transaction_type,
+            "old_quantity": old_quantity,
+            "new_quantity": new_quantity,
+            "quantity_diff": quantity_diff,
+            "reason": update_data.reason,
+            "supplier_id": transaction.supplier_id,
+            "lot_number": transaction.lot_number
+        }
+        
+        audit_log = AuditLog(
+            user_id=user.id,
+            action="수량 수정",
+            target_type="StockTransaction",
+            target_id=transaction_id,
+            details=json.dumps(transaction_details, ensure_ascii=False),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            created_at=get_seoul_time()
+        )
+        db.add(audit_log)
+    except Exception as e:
+        print(f"감사 로그 기록 실패: {e}")
+        # 감사 로그 기록 실패해도 수정은 계속 진행
+    
+    db.commit()
+    
+    return {"message": "수량이 성공적으로 수정되었습니다"}
 
 # audit_logs 테이블 생성 API
 @app.post("/api/debug/create-audit-logs-table")
@@ -2563,35 +2739,50 @@ async def get_orders(
         # 임시로 인증 없이 테스트
         pass
     
-    query = db.query(Order).join(Supplier)
-    
-    if supplier_id:
-        query = query.filter(Order.supplier_id == supplier_id)
-    if status:
-        query = query.filter(Order.status == status)
-    
-    orders = query.order_by(Order.created_at.desc()).all()
-    
-    return {
-        "orders": [
-            {
-                "id": o.id,
-                "order_number": o.order_number,
-                "supplier_id": o.supplier_id,
-                "supplier_name": o.supplier.name,
-                "total_amount": o.total_amount,
-                "currency": o.currency,
-                "status": o.status,
-                "priority": o.priority,
-                "payment_type": o.payment_type,
-                "order_date": o.order_date.isoformat(),
-                "delivery_date": o.delivery_date.isoformat() if o.delivery_date else None,
-                "notes": o.notes,
-                "created_at": o.created_at.isoformat()
-            }
-            for o in orders
-        ]
-    }
+    try:
+        # 테이블 존재 여부 확인
+        db.execute(text("SELECT 1 FROM orders LIMIT 1"))
+        db.execute(text("SELECT 1 FROM suppliers LIMIT 1"))
+        
+        query = db.query(Order).join(Supplier)
+        
+        if supplier_id:
+            query = query.filter(Order.supplier_id == supplier_id)
+        if status:
+            query = query.filter(Order.status == status)
+        
+        orders = query.order_by(Order.created_at.desc()).all()
+        
+        return {
+            "orders": [
+                {
+                    "id": o.id,
+                    "order_number": o.order_number,
+                    "supplier_id": o.supplier_id,
+                    "supplier_name": o.supplier.name,
+                    "total_amount": o.total_amount,
+                    "currency": o.currency,
+                    "status": o.status,
+                    "priority": o.priority,
+                    "payment_type": o.payment_type,
+                    "order_date": o.order_date.isoformat(),
+                    "delivery_date": o.delivery_date.isoformat() if o.delivery_date else None,
+                    "notes": o.notes,
+                    "created_at": o.created_at.isoformat()
+                }
+                for o in orders
+            ]
+        }
+    except Exception as e:
+        print(f"DEBUG: orders 테이블 조회 중 오류: {e}")
+        # 테이블이 없으면 생성 시도
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("orders 테이블을 생성했습니다.")
+            return {"orders": []}
+        except Exception as create_error:
+            print(f"DEBUG: 테이블 생성 중 오류: {create_error}")
+            raise HTTPException(status_code=500, detail=f"데이터베이스 오류: {str(e)}")
 
 # 주문 상세 조회
 @app.get("/api/orders/{order_id}")
@@ -3193,6 +3384,9 @@ async def orders_page(request: Request, access_token: str = Cookie(None)):
 if __name__ == "__main__":
     # 데이터베이스 마이그레이션 실행
     print("데이터베이스 마이그레이션을 확인하는 중...")
+    
+    # 모든 테이블 존재 여부 확인 및 생성
+    ensure_all_tables_exist()
     
     # 주문 관련 테이블이 없으면 생성
     if not check_order_tables_exist():
